@@ -1956,6 +1956,7 @@ async function addToCalendar(id) {
       event.end   = { date: tomorrow };
     }
 
+    console.log('Sending event:', JSON.stringify(event));
     fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
