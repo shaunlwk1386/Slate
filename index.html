@@ -1940,7 +1940,10 @@ async function addToCalendar(id) {
   if (!task) return;
 
   function doInsert(token) {
-    const event = { summary: task.title };
+    const contextLabel = task.context_type
+      ? task.context_type.charAt(0).toUpperCase() + task.context_type.slice(1).replace('_', ' ')
+      : null;
+    const event = { summary: contextLabel ? `${contextLabel} - ${task.title}` : task.title };
     if (task.notes) event.description = task.notes;
 
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
