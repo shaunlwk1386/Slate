@@ -1927,10 +1927,8 @@ async function addToCalendar(id) {
   if (!task) return;
 
   function doInsert(token) {
-    const event = {
-      summary: task.title,
-      description: task.notes || '',
-    };
+    const event = { summary: task.title };
+    if (task.notes) event.description = task.notes;
 
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (task.due_date) {
