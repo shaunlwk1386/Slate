@@ -1803,7 +1803,7 @@ async function clearTab(scope) {
   clearedTasks    = toDelete;
   clearedSubtasks = subtasks.filter(s => ids.includes(s.task_id));
 
-  // Delete from Supabase
+  deleteCalEvents(toDelete);
   await db.from('slate_tasks').delete().in('id', ids);
   tasks    = tasks.filter(t => !ids.includes(t.id));
   subtasks = subtasks.filter(s => !ids.includes(s.task_id));
