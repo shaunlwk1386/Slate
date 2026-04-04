@@ -1254,10 +1254,11 @@ async function clearDone() {
 
 async function addTask(data) {
   const { data: row, error } = await db.from('slate_tasks').insert([data]).select().single();
-  if (error) { showToast('Error saving task'); return; }
+  if (error) { showToast('Error saving task'); return null; }
   tasks.push(row);
   renderAll();
   showToast('Task added');
+  return row;
 }
 
 async function updateTask(id, data) {
