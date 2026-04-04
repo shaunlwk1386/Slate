@@ -1523,7 +1523,7 @@ function buildCard(task, showBadge = false, isOverdueCard = false) {
   // Cal button
   const calBtn = !isDone
     ? task.in_calendar
-      ? `<button class="btn-cal added" disabled>In Cal</button>`
+      ? `<button class="btn-cal added" onclick="removeFromCalendar('${task.id}')">In Cal ✕</button>`
       : `<button class="btn-cal" onclick="addToCalendar('${task.id}')">+ Cal</button>`
     : '';
 
