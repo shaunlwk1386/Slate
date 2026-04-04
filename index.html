@@ -1385,6 +1385,38 @@ function renderRecommended() {
 }
 
 // ── FOCUS MODE ────────────────────────────────────────────────────────────────
+function syncDateText(input) {
+  const val = input.value.trim();
+  const parts = val.split('/');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2,'0');
+    const mon = parts[1].padStart(2,'0');
+    const yr  = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+    const iso = `${yr}-${mon}-${day}`;
+    if (!isNaN(new Date(iso))) document.getElementById('input-due').value = iso;
+  }
+}
+function syncDatePicker(input) {
+  if (!input.value) return;
+  const [yr, mon, day] = input.value.split('-');
+  document.getElementById('input-due-text').value = `${day}/${mon}/${yr.slice(2)}`;
+}
+function syncTimeText(input) {
+  const val = input.value.trim();
+  const parts = val.split(':');
+  if (parts.length === 2) {
+    const hh = parts[0].padStart(2,'0');
+    const mm = parts[1].padStart(2,'0');
+    if (!isNaN(parseInt(hh)) && !isNaN(parseInt(mm))) {
+      document.getElementById('input-time').value = `${hh}:${mm}`;
+    }
+  }
+}
+function syncTimePicker(input) {
+  if (!input.value) return;
+  document.getElementById('input-time-text').value = input.value;
+}
+
 function toggleAddCal() {
   addToCalFlag = !addToCalFlag;
   const track = document.getElementById('toggle-add-cal');
