@@ -1938,8 +1938,10 @@ function openEditModal(id) {
   selectedCat      = task.category;
   selectedPriority = task.priority;
   document.getElementById('input-title').value    = task.title;
-  document.getElementById('input-due').value      = task.due_date         || '';
-  document.getElementById('input-time').value     = task.due_time         || '';
+  document.getElementById('input-due').value       = task.due_date  || '';
+  document.getElementById('input-due-text').value  = task.due_date  ? (() => { const [y,m,d] = task.due_date.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : '';
+  document.getElementById('input-time').value      = task.due_time  || '';
+  document.getElementById('input-time-text').value = task.due_time  || '';
   document.getElementById('input-estimate').value = task.estimated_minutes || '';
   document.getElementById('input-context').value  = task.context_type     || '';
   document.getElementById('input-notes').value    = task.notes            || '';
