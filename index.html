@@ -1931,17 +1931,20 @@ async function addToCalendar(id) {
     if (task.notes) event.description = task.notes;
 
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const pad = n => String(n).padStart(2, '0');
     if (task.due_date) {
       if (task.due_time) {
-        const start = `${task.due_date}T${task.due_time}:00`;
-        const endD  = new Date(`${task.due_date}T${task.due_time}:00`);
+        // ensure time is HH:MM format
+        const timeParts = task.due_time.split(':');
+        const hh = pad(parseInt(timeParts[0]));
+        const mm = pad(parseInt(timeParts[1]));
+        const start = `${task.due_date}T${hh}:${mm}:00`;
+        const endD = new Date(start);
         endD.setMinutes(endD.getMinutes() + (task.estimated_minutes || 30));
-        const pad = n => String(n).padStart(2, '0');
         const endStr = `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}T${pad(endD.getHours())}:${pad(endD.getMinutes())}:00`;
         event.start = { dateTime: start, timeZone: tz };
         event.end   = { dateTime: endStr, timeZone: tz };
       } else {
-        // all-day: end date must be day after
         const endD = new Date(task.due_date + 'T00:00:00');
         endD.setDate(endD.getDate() + 1);
         event.start = { date: task.due_date };
