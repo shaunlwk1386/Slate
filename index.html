@@ -2143,11 +2143,8 @@ async function submitTask() {
     await updateTask(editingId, data);
     showToast('Task updated');
   } else {
-    await addTask(data);
-    if (shouldAddToCal) {
-      const newTask = tasks[tasks.length - 1];
-      if (newTask) addToCalendar(newTask.id);
-    }
+    const newTask = await addTask(data);
+    if (shouldAddToCal && newTask) addToCalendar(newTask.id);
   }
 }
 
