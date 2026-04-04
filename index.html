@@ -1027,11 +1027,27 @@
     <div class="form-group" style="display:flex;gap:10px">
       <div style="flex:1">
         <label class="form-label">Due Date</label>
-        <input class="form-input" id="input-due" type="date" />
+        <div style="display:flex;gap:4px">
+          <input class="form-input" id="input-due-text" type="text" placeholder="dd/mm/yy"
+            style="flex:1;min-width:0"
+            oninput="syncDateText(this)"
+            onblur="syncDateText(this)" />
+          <input class="form-input" id="input-due" type="date"
+            style="width:32px;padding:8px 6px;flex-shrink:0;cursor:pointer"
+            oninput="syncDatePicker(this)" />
+        </div>
       </div>
       <div style="flex:1">
         <label class="form-label">Time</label>
-        <input class="form-input" id="input-time" type="time" />
+        <div style="display:flex;gap:4px">
+          <input class="form-input" id="input-time-text" type="text" placeholder="hh:mm"
+            style="flex:1;min-width:0"
+            oninput="syncTimeText(this)"
+            onblur="syncTimeText(this)" />
+          <input class="form-input" id="input-time" type="time"
+            style="width:32px;padding:8px 6px;flex-shrink:0;cursor:pointer"
+            oninput="syncTimePicker(this)" />
+        </div>
       </div>
     </div>
     <div class="form-group">
