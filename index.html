@@ -1,0 +1,2156 @@
+<!DOCTYPE html>
+<!--
+  SLATE v1.0
+  ──────────────────────────────────────────────────────────────
+  Run these in your Supabase SQL editor before first use:
+
+  CREATE TABLE slate_tasks (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('personal', 'work')),
+    priority TEXT NOT NULL CHECK (priority IN ('high', 'medium', 'low')),
+    due_date DATE,
+    notes TEXT,
+    completed BOOLEAN DEFAULT FALSE,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE TABLE slate_subtasks (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    task_id UUID REFERENCES slate_tasks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    completed BOOLEAN DEFAULT FALSE,
+    order_index INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  Also enable Realtime for both tables in Supabase Dashboard →
+  Database → Replication → toggle slate_tasks and slate_subtasks.
+  ──────────────────────────────────────────────────────────────
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #eef0f4;
+      --surface:      #ffffff;
+      --accent:       #475569;
+      --accent-dark:  #1e293b;
+      --nav-bg:       #1a202c;
+      --text:         #111111;
+      --text-muted:   #6b7280;
+      --text-light:   #94a3b8;
+      --high:         #ef4444;
+      --med:          #f59e0b;
+      --low:          #94a3b8;
+      --done-color:   #22c55e;
+      --border:       #e2e8f0;
+      --radius:       14px;
+      --shadow:       0 2px 12px rgba(0,0,0,0.07);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 calc(72px + env(safe-area-inset-bottom));
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 24px 20px 12px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--accent-dark);
+    }
+    .header-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Tabs ── */
+    .tab-content { display: none; padding: 0 16px; }
+    .tab-content.active { display: block; }
+
+    /* ── Task list ── */
+    .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+    /* ── Task card ── */
+    .task-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .task-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* Checkbox */
+    .task-checkbox {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .task-checkbox.checked {
+      background: var(--done-color);
+      border-color: var(--done-color);
+    }
+    .task-checkbox.checked::after {
+      content: '';
+      width: 9px;
+      height: 5px;
+      border: 2px solid white;
+      border-top: none;
+      border-right: none;
+      transform: rotate(-45deg) translateY(-1px);
+      display: block;
+    }
+
+    /* Body */
+    .task-body { flex: 1; min-width: 0; }
+    .task-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .task-title.done { text-decoration: line-through; color: var(--text-muted); }
+    .task-meta {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .priority-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .priority-dot.must   { background: var(--high); }
+    .priority-dot.should { background: var(--med); }
+    .priority-dot.could  { background: var(--low); }
+
+    .task-due {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .task-due.overdue { color: var(--high); font-weight: 500; }
+
+    .cat-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text-muted);
+    }
+
+    .chevron {
+      color: var(--text-light);
+      font-size: 11px;
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+    .chevron.open { transform: rotate(180deg); }
+
+    /* ── Task detail ── */
+    .task-detail {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+    }
+    .task-detail.open { display: block; }
+
+    .task-notes {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+
+    /* Subtasks */
+    .subtask-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
+    .subtask-item { display: flex; align-items: center; gap: 8px; }
+    .subtask-check {
+      width: 15px;
+      height: 15px;
+      border-radius: 3px;
+      border: 1.5px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .subtask-check.checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .subtask-check.checked::after {
+      content: '';
+      width: 7px;
+      height: 4px;
+      border: 1.5px solid white;
+      border-top: none;
+      border-right: none;
+      transform: rotate(-45deg) translateY(-0.5px);
+      display: block;
+    }
+    .subtask-title { font-size: 13px; color: var(--text); }
+    .subtask-title.done { text-decoration: line-through; color: var(--text-light); }
+
+    .add-subtask-row { display: flex; gap: 6px; margin-bottom: 10px; }
+    .add-subtask-input {
+      flex: 1;
+      background: var(--bg);
+      border: none;
+      border-radius: 7px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      outline: none;
+    }
+    .add-subtask-input::placeholder { color: var(--text-light); }
+    .btn-add-sub {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 7px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Action row */
+    .task-actions {
+      display: flex;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-edit    { background: var(--bg);    color: var(--accent);     }
+    .btn-delete  { background: #fef2f2;      color: var(--high);       }
+    .btn-restore { background: #f0fdf4;      color: var(--done-color); }
+    .btn-extend  { background: #fff7ed;      color: #d97706;           }
+    .btn-cal     { background: #eff6ff; color: #3b82f6; }
+    .btn-cal.added { background: #dbeafe; color: #1d4ed8; opacity: 0.6; cursor: default; }
+    .btn-edit, .btn-delete, .btn-restore, .btn-extend, .btn-cal {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* ── Overdue section ── */
+    .overdue-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--high);
+      margin: 4px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .overdue-label::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--high);
+      display: inline-block;
+    }
+    .task-card.overdue-card         { border-left: 3px solid var(--high); }
+    .task-card.overdue-card.aging   { border-left: 3px solid #dc2626; background: #fff8f8; }
+    .task-card.overdue-card.stale   { border-left: 4px solid #991b1b; background: #fef2f2; }
+
+    /* ── Overdue age tag ── */
+    .overdue-age {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #fef2f2;
+      color: var(--high);
+    }
+    .overdue-age.aging { background: #fee2e2; color: #dc2626; }
+    .overdue-age.stale { background: #fecaca; color: #991b1b; font-weight: 700; }
+
+    /* ── Load indicator ── */
+    .load-indicator {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: none;
+    }
+    .load-indicator.busy { display: block; color: var(--med); }
+    .load-indicator.heavy { display: block; color: var(--high); }
+
+    /* ── Subtask progress ── */
+    .subtask-progress {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: var(--text-light);
+    }
+    .subtask-progress.done-all { color: var(--done-color); }
+
+    /* ── Calendar badge ── */
+    .cal-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #eff6ff;
+      color: #3b82f6;
+    }
+
+    /* ── Stale prompt ── */
+    .stale-prompt {
+      background: #fef2f2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      border: 1px solid #fecaca;
+    }
+    .stale-prompt p {
+      font-size: 12px;
+      font-weight: 600;
+      color: #991b1b;
+      margin-bottom: 8px;
+    }
+    .stale-prompt-actions { display: flex; gap: 6px; }
+    .btn-stale-keep   { background: var(--bg);  color: var(--text-muted); }
+    .btn-stale-extend { background: #fff7ed;    color: #d97706; }
+    .btn-stale-remove { background: #fef2f2;    color: var(--high); }
+    .btn-stale-keep, .btn-stale-extend, .btn-stale-remove {
+      font-size: 11px; font-weight: 600; padding: 5px 12px;
+      border-radius: 6px; border: none; cursor: pointer;
+    }
+
+    /* ── Extend quick options ── */
+    .extend-quick { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .btn-quick {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-quick:hover { background: var(--accent); color: white; }
+
+    /* ── Cal button ── */
+    .btn-cal     { background: #eff6ff; color: #3b82f6; }
+    .btn-cal.added { background: #dbeafe; color: #1d4ed8; opacity: 0.6; cursor: default; }
+    .btn-edit, .btn-delete, .btn-restore, .btn-extend, .btn-cal {
+      font-size: 11px; font-weight: 600; padding: 6px 14px;
+      border-radius: 7px; border: none; cursor: pointer;
+    }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin: 16px 0 8px;
+    }
+    .section-label:first-child { margin-top: 4px; }
+
+    /* ── Today toggle ── */
+    .today-bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 2px 10px;
+    }
+    .today-toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--surface);
+      border: none;
+      border-radius: 100px;
+      padding: 6px 12px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .today-toggle.on {
+      background: var(--accent-dark);
+      color: white;
+    }
+    .today-toggle .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-light);
+      transition: background 0.15s;
+    }
+    .today-toggle.on .dot { background: #86efac; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 56px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 28px; margin-bottom: 10px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed;
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent-dark);
+      color: white;
+      font-size: 26px;
+      line-height: 1;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: transform 0.15s;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    /* ── Bottom nav ── */
+    .nav-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--nav-bg);
+      display: flex;
+      z-index: 200;
+      box-shadow: 0 -1px 0 rgba(255,255,255,0.06);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 10px 4px;
+      border: none;
+      background: transparent;
+      color: #4b5563;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      transition: color 0.15s;
+      white-space: nowrap;
+    }
+    .nav-btn .nav-icon {
+      font-size: 16px;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+    .nav-btn.active { color: #ffffff; }
+    .nav-btn.active .nav-icon { color: #ffffff; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 300;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 18px 18px 24px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: var(--accent-dark); }
+    .modal-close {
+      background: var(--bg);
+      border: none;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      font-size: 15px;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 12px; }
+    .form-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+    .form-input, .form-textarea {
+      width: 100%;
+      background: var(--bg);
+      border: none;
+      border-radius: 10px;
+      padding: 8px 11px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      outline: none;
+    }
+    .form-input:focus, .form-textarea:focus {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+    .form-textarea { resize: vertical; min-height: 56px; }
+
+    .segment-group {
+      display: flex;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 6px 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .seg-btn.active {
+      background: white;
+      color: var(--accent-dark);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .seg-btn[data-priority="must"].active   { color: var(--high); }
+    .seg-btn[data-priority="should"].active { color: var(--med); }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--accent-dark);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 11px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    /* ── Time pressure ── */
+    .time-pressure {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .time-pressure.soon   { background: #fef9c3; color: #92400e; }
+    .time-pressure.urgent { background: #fee2e2; color: #dc2626; }
+    .time-pressure.missed { background: #fecaca; color: #991b1b; }
+
+    /* ── Deferral badge ── */
+    .defer-badge        { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-light); }
+    .defer-badge.repeat { color: #d97706; font-weight: 700; }
+
+    /* ── Combined controls bar ── */
+    .combined-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px 10px;
+      gap: 8px;
+    }
+    .control-group { display: flex; gap: 6px; }
+
+    /* ── Recommended Now ── */
+    .rec-section {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .rec-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .rec-header-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--accent-dark);
+    }
+    .rec-chevron { font-size: 10px; color: var(--text-light); transition: transform 0.2s; }
+    .rec-chevron.open { transform: rotate(180deg); }
+    .rec-body { display: none; padding: 0 14px 14px; }
+    .rec-body.open { display: block; }
+    .rec-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+    .rec-control { flex: 1; }
+    .rec-control-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 5px;
+    }
+    .rec-select {
+      width: 100%; background: var(--bg); border: none; border-radius: 8px;
+      padding: 7px 10px; font-size: 12px; font-family: 'Inter', sans-serif;
+      color: var(--text); outline: none; cursor: pointer;
+    }
+    .rec-output { display: flex; flex-direction: column; gap: 7px; }
+    .rec-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 11px; background: var(--bg); border-radius: 9px;
+    }
+    .rec-item.primary { background: #f1f5f9; border-left: 3px solid var(--accent-dark); }
+    .rec-rank { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; color: var(--text-light); flex-shrink: 0; padding-top: 1px; }
+    .rec-item.primary .rec-rank { color: var(--accent-dark); }
+    .rec-info { flex: 1; min-width: 0; }
+    .rec-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rec-reason { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .rec-empty { font-size: 13px; color: var(--text-light); padding: 4px 0; }
+
+    /* ── Plan tab ── */
+    .plan-day { margin-bottom: 22px; }
+    .plan-day-header {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 13px; font-weight: 700; color: var(--accent-dark);
+      margin-bottom: 4px;
+    }
+    .plan-day-date { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400; color: var(--text-muted); }
+    .plan-load { font-size: 11px; font-weight: 500; margin-bottom: 8px; }
+    .plan-load.busy { color: var(--med); }
+    .plan-load.heavy { color: var(--high); }
+    .plan-empty { font-size: 13px; color: var(--text-light); padding: 8px 0; }
+
+    /* ── Radar 7-day ── */
+    .radar-list { display: flex; flex-direction: column; gap: 8px; }
+    .radar-day {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 2px solid #d1d5db;
+    }
+    .radar-day.load-light  { border-color: #22c55e; }
+    .radar-day.load-busy   { border-color: #f59e0b; }
+    .radar-day.load-heavy  { border-color: #ef4444; }
+    .radar-day-label { flex: 1; min-width: 0; }
+    .radar-day-name { font-size: 14px; font-weight: 600; color: var(--accent-dark); }
+    .radar-day-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .radar-counts { display: flex; align-items: center; gap: 14px; }
+    .radar-count { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .radar-count-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1;
+      color: var(--text-light);
+    }
+    .radar-count-num.must   { color: var(--high); }
+    .radar-count-num.should { color: var(--med); }
+    .radar-count-num.could  { color: var(--low); }
+    .radar-count-lbl {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-light);
+    }
+
+    /* ── Radar modal ── */
+    .radar-modal-group { margin-bottom: 16px; }
+    .radar-modal-group:last-child { margin-bottom: 0; }
+    .radar-modal-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+    }
+    .radar-modal-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--bg);
+      border-radius: 9px;
+      margin-bottom: 5px;
+    }
+    .radar-modal-item:last-child { margin-bottom: 0; }
+    .radar-modal-title { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .radar-modal-due { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+    .radar-modal-due.overdue { color: var(--high); }
+    .radar-modal-cat { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; border-radius: 4px; background: var(--surface); color: var(--text-muted); flex-shrink: 0; }
+    .radar-modal-empty { font-size: 13px; color: var(--text-light); padding: 4px 0; }
+
+    /* ── Done stat ── */
+    .done-stat {
+      padding: 14px 2px 6px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .done-stat-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 26px;
+      font-weight: 500;
+      color: var(--done-color);
+      line-height: 1;
+    }
+    .done-stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── Clear tab ── */
+    .clear-tab-bar {
+      display: flex;
+      justify-content: center;
+      padding: 18px 0 4px;
+    }
+    .btn-clear-tab {
+      background: none;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-light);
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+    .btn-clear-tab:hover { color: var(--high); }
+
+    /* ── Toast with action ── */
+    .toast-undo {
+      position: fixed;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--accent-dark);
+      color: white;
+      padding: 9px 8px 9px 20px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 400;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      white-space: nowrap;
+    }
+    .toast-undo.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    .toast-undo-btn {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      border-radius: 100px;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      cursor: pointer;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--accent-dark);
+      color: white;
+      padding: 9px 20px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 400;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Slate <span style="font-size:13px;font-weight:400;color:var(--text-muted)">v1.1 by egg</span></h1>
+  <span class="header-date" id="header-date"></span>
+</div>
+
+<div class="tab-content active" id="tab-personal">
+  <div class="today-bar">
+    <button class="today-toggle" id="toggle-personal" onclick="toggleToday('personal')">
+      <span class="dot"></span>Due Today
+    </button>
+  </div>
+  <div class="task-list" id="list-personal"></div>
+  <div class="clear-tab-bar"><button class="btn-clear-tab" onclick="clearTab('personal')">Clean Slate</button></div>
+</div>
+<div class="tab-content" id="tab-work">
+  <div class="today-bar">
+    <button class="today-toggle" id="toggle-work" onclick="toggleToday('work')">
+      <span class="dot"></span>Due Today
+    </button>
+  </div>
+  <div class="task-list" id="list-work"></div>
+  <div class="clear-tab-bar"><button class="btn-clear-tab" onclick="clearTab('work')">Clean Slate</button></div>
+</div>
+<div class="tab-content" id="tab-combined">
+  <div class="combined-controls">
+    <div class="control-group">
+      <button class="today-toggle" id="toggle-focus" onclick="toggleFocusMode()">
+        <span class="dot"></span>Focus
+      </button>
+    </div>
+    <button class="today-toggle" id="toggle-combined" onclick="toggleToday('combined')">
+      <span class="dot"></span>Due Today
+    </button>
+  </div>
+  <div class="rec-section" id="rec-section">
+    <div class="rec-header" onclick="toggleRec()">
+      <span class="rec-header-title">Recommended Now</span>
+      <span class="rec-chevron" id="rec-chevron">▾</span>
+    </div>
+    <div class="rec-body" id="rec-body">
+      <div class="rec-controls">
+        <div class="rec-control">
+          <div class="rec-control-label">Available Time</div>
+          <select class="rec-select" id="rec-time" onchange="renderRecommended()">
+            <option value="15">15 min</option>
+            <option value="30" selected>30 min</option>
+            <option value="60">60 min</option>
+            <option value="120">2 hours</option>
+          </select>
+        </div>
+        <div class="rec-control">
+          <div class="rec-control-label">Situation</div>
+          <select class="rec-select" id="rec-context" onchange="renderRecommended()">
+            <option value="any">Any</option>
+            <option value="computer">Computer</option>
+            <option value="admin">Admin</option>
+            <option value="deep_work">Deep Work</option>
+            <option value="errands">Errands</option>
+            <option value="fun">Fun</option>
+            <option value="leisure">Leisure</option>
+          </select>
+        </div>
+      </div>
+      <div class="rec-output" id="rec-output"></div>
+    </div>
+  </div>
+  <div class="load-indicator" id="load-indicator"></div>
+  <div id="list-combined"></div>
+  <div class="clear-tab-bar"><button class="btn-clear-tab" onclick="clearTab('all')">Clean Slate</button></div>
+</div>
+<div class="tab-content" id="tab-done">
+  <div id="done-stat"></div>
+  <div id="list-done"></div>
+  <div class="clear-tab-bar"><button class="btn-clear-tab" onclick="clearDone()">Clean Slate</button></div>
+</div>
+<div class="tab-content" id="tab-plan">
+  <div id="plan-content"></div>
+</div>
+
+<button class="fab" onclick="openAddModal()">+</button>
+
+<nav class="nav-bar">
+  <button class="nav-btn active" onclick="switchTab('personal', this)">
+    <span class="nav-icon">◯</span>Personal
+  </button>
+  <button class="nav-btn" onclick="switchTab('work', this)">
+    <span class="nav-icon">⊡</span>Work
+  </button>
+  <button class="nav-btn" onclick="switchTab('combined', this)">
+    <span class="nav-icon">◎</span>All
+  </button>
+  <button class="nav-btn" onclick="switchTab('plan', this)">
+    <span class="nav-icon">⬡</span>Radar
+  </button>
+  <button class="nav-btn" onclick="switchTab('done', this)">
+    <span class="nav-icon">✓</span>Done
+  </button>
+</nav>
+
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">New Task</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="input-title" type="text" placeholder="What needs to be done?" />
+    </div>
+
+    <div style="display:flex;gap:10px" class="form-group">
+      <div style="flex:1">
+        <label class="form-label">Category</label>
+        <div class="segment-group" id="seg-cat">
+          <button class="seg-btn active" data-cat="personal" onclick="selectSeg('cat', this)">Personal</button>
+          <button class="seg-btn" data-cat="work" onclick="selectSeg('cat', this)">Work</button>
+        </div>
+      </div>
+      <div style="flex:1.5">
+        <label class="form-label">Priority</label>
+        <div class="segment-group" id="seg-priority">
+          <button class="seg-btn active" data-priority="must"   onclick="selectSeg('priority', this)">Must</button>
+          <button class="seg-btn"        data-priority="should" onclick="selectSeg('priority', this)">Should</button>
+          <button class="seg-btn"        data-priority="could"  onclick="selectSeg('priority', this)">Could</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="display:flex;gap:10px">
+      <div style="flex:1.2">
+        <label class="form-label">Due Date</label>
+        <input class="form-input" id="input-due" type="date" />
+      </div>
+      <div style="flex:1">
+        <label class="form-label">Time</label>
+        <input class="form-input" id="input-time" type="time" />
+      </div>
+      <div style="flex:0.7">
+        <label class="form-label">Est. min</label>
+        <input class="form-input" id="input-estimate" type="number" placeholder="30" min="1" max="480" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Context</label>
+      <select class="form-input" id="input-context" style="cursor:pointer">
+        <option value="">Any</option>
+        <option value="computer">Computer</option>
+        <option value="admin">Admin</option>
+        <option value="deep_work">Deep Work</option>
+        <option value="errands">Errands</option>
+        <option value="fun">Fun</option>
+        <option value="leisure">Leisure</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="input-notes" placeholder="Any context…"></textarea>
+    </div>
+
+    <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <label class="form-label" style="margin:0">Add to Google Calendar</label>
+      <div id="toggle-add-cal" onclick="toggleAddCal()" style="width:40px;height:22px;border-radius:100px;background:var(--border);cursor:pointer;position:relative;transition:background 0.15s;flex-shrink:0">
+        <div id="toggle-add-cal-thumb" style="width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="modal-submit" onclick="submitTask()">Add Task</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="extend-modal" style="align-items:center;padding:0 20px">
+  <div class="modal" style="padding-bottom:24px;border-radius:20px;max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title">Extend Due Date</span>
+      <button class="modal-close" onclick="closeExtendModal()">✕</button>
+    </div>
+    <div class="extend-quick">
+      <button class="btn-quick" onclick="extendQuick(1)">Tomorrow</button>
+      <button class="btn-quick" onclick="extendQuick(3)">+3 Days</button>
+      <button class="btn-quick" onclick="extendQuick(7)">Next Week</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Custom Date</label>
+      <input class="form-input" id="extend-date" type="date" />
+    </div>
+    <button class="btn-submit" onclick="submitExtend()">Save</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="radar-modal">
+  <div class="modal" style="padding-bottom:28px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="radar-modal-title"></div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);margin-top:2px" id="radar-modal-date"></div>
+      </div>
+      <button class="modal-close" onclick="closeRadarModal()">✕</button>
+    </div>
+    <div id="radar-modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="toast-undo" id="toast-undo">
+  <span id="toast-undo-msg"></span>
+  <button class="toast-undo-btn" onclick="undoClear()">Undo</button>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = 'https://zlnchisvaaaoqyqtmmov.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsbmNoaXN2YWFhb3F5cXRtbW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzQ2NTQsImV4cCI6MjA5MDY1MDY1NH0.qy3GqeKQoGGJydGuWkDDeMDS-4ki2KZx_AjfLCxSJeU';
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let tasks    = [];
+let subtasks = [];
+let editingId        = null;
+let selectedCat      = 'personal';
+let selectedPriority = 'must';
+
+const GCAL_CLIENT_ID  = '535607802349-mjfrpdddsa1mpenitts3c0050fglrtq8.apps.googleusercontent.com';
+const GCAL_SCOPE      = 'https://www.googleapis.com/auth/calendar.events';
+let   gcalToken       = null;
+
+const PRIORITY_ORDER  = { must: 0, should: 1, could: 2 };
+const PRIORITY_WEIGHT = { must: 2, should: 1, could: 0.5 };
+const todayFilter     = { personal: false, work: false, combined: false };
+let focusModeOn  = false;
+let addToCalFlag = false;
+let lastCat     = 'personal';
+let lastPriority = 'must';
+
+// ── DATE UTILS ────────────────────────────────────────────────────────────────
+function todayStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatDue(dateStr) {
+  if (!dateStr) return null;
+  const d       = new Date(dateStr + 'T00:00:00');
+  const today   = new Date(); today.setHours(0, 0, 0, 0);
+  const diff    = Math.round((d - today) / 86400000);
+  if (diff === 0)  return 'Today';
+  if (diff === 1)  return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+}
+
+function isOverdue(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  return d < todayStart();
+}
+
+function overdueDays(dateStr) {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr + 'T00:00:00');
+  return Math.max(0, Math.round((todayStart() - d) / 86400000));
+}
+
+function overdueState(dateStr) {
+  const days = overdueDays(dateStr);
+  if (days >= 6) return 'stale';
+  if (days >= 3) return 'aging';
+  return 'overdue';
+}
+
+function formatTime(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':');
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12  = hour % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
+
+function offsetDate(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+function formatTimePressure(dateStr, timeStr) {
+  if (!dateStr || !timeStr || !isTodayDate(dateStr)) return null;
+  const now = new Date();
+  const [h, m] = timeStr.split(':').map(Number);
+  const due = new Date(); due.setHours(h, m, 0, 0);
+  const diffMin = Math.round((due - now) / 60000);
+  if (diffMin < -120) return { text: `Missed by ${Math.round(Math.abs(diffMin)/60)}h`, state: 'missed' };
+  if (diffMin < 0)    return { text: `Missed by ${Math.abs(diffMin)}m`, state: 'missed' };
+  if (diffMin <= 60)  return { text: `Due in ${diffMin}m`, state: 'urgent' };
+  if (diffMin <= 240) return { text: `Due in ${Math.round(diffMin/60)}h`, state: 'soon' };
+  return null;
+}
+
+// ── SUPABASE ──────────────────────────────────────────────────────────────────
+async function loadAll() {
+  const [{ data: t, error: e1 }, { data: s, error: e2 }] = await Promise.all([
+    db.from('slate_tasks').select('*').order('created_at', { ascending: true }),
+    db.from('slate_subtasks').select('*').order('order_index', { ascending: true })
+  ]);
+  if (e1 || e2) { showToast('Connection error'); return; }
+  tasks    = t || [];
+  subtasks = s || [];
+  renderAll();
+}
+
+async function clearDone() {
+  const done = tasks.filter(t => t.completed);
+  if (!done.length) { showToast('Nothing to clear'); return; }
+  const ids = done.map(t => t.id);
+  clearedTasks    = done;
+  clearedSubtasks = subtasks.filter(s => ids.includes(s.task_id));
+  await db.from('slate_tasks').delete().in('id', ids);
+  tasks    = tasks.filter(t => !ids.includes(t.id));
+  subtasks = subtasks.filter(s => !ids.includes(s.task_id));
+  renderAll();
+  showUndoToast('Completed tasks cleared', 5000);
+}
+
+async function addTask(data) {
+  const { data: row, error } = await db.from('slate_tasks').insert([data]).select().single();
+  if (error) { showToast('Error saving task'); return; }
+  tasks.push(row);
+  renderAll();
+  showToast('Task added');
+}
+
+async function updateTask(id, data) {
+  const { error } = await db.from('slate_tasks').update(data).eq('id', id);
+  if (error) { showToast('Error updating'); return; }
+  tasks = tasks.map(t => t.id === id ? { ...t, ...data } : t);
+  renderAll();
+}
+
+async function deleteTask(id) {
+  await db.from('slate_tasks').delete().eq('id', id);
+  tasks    = tasks.filter(t => t.id !== id);
+  subtasks = subtasks.filter(s => s.task_id !== id);
+  renderAll();
+  showToast('Deleted');
+}
+
+async function toggleTask(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const completing = !task.completed;
+
+  if (completing) {
+    const subs    = subtasks.filter(s => s.task_id === id);
+    const pending = subs.filter(s => !s.completed).length;
+    if (pending > 0 && !confirm(`${pending} subtask${pending > 1 ? 's' : ''} still open. Mark task as done anyway?`)) return;
+  }
+
+  const completed_at = completing ? new Date().toISOString() : null;
+  await updateTask(id, { completed: completing, completed_at });
+  showToast(completing ? 'Done ✓' : 'Restored');
+}
+
+async function addSubtask(taskId, title) {
+  const order = subtasks.filter(s => s.task_id === taskId).length;
+  const { data: row, error } = await db
+    .from('slate_subtasks')
+    .insert([{ task_id: taskId, title, completed: false, order_index: order }])
+    .select().single();
+  if (error) return;
+  subtasks.push(row);
+  renderAll();
+}
+
+async function toggleSubtask(id) {
+  const sub = subtasks.find(s => s.id === id);
+  if (!sub) return;
+  const completed = !sub.completed;
+  await db.from('slate_subtasks').update({ completed }).eq('id', id);
+  subtasks = subtasks.map(s => s.id === id ? { ...s, completed } : s);
+  renderAll();
+}
+
+// ── RECOMMENDATION ────────────────────────────────────────────────────────────
+function scoreTask(task, availMins, context) {
+  let score = 0;
+  const reasons = [];
+
+  if (task.priority === 'must')        { score += 6; reasons.push('must'); }
+  else if (task.priority === 'should') { score += 3; reasons.push('should'); }
+  else                                  { score += 1; }
+
+  if (isOverdue(task.due_date)) {
+    score += Math.min(20, 10 + overdueDays(task.due_date) * 2);
+    reasons.push('overdue');
+  }
+  if (isTodayDate(task.due_date)) { score += 10; reasons.push('due today'); }
+
+  if (task.estimated_minutes) {
+    if (task.estimated_minutes <= availMins) { score += 3; reasons.push(`fits ${availMins}m`); }
+    else score -= 10;
+  }
+
+  if (context !== 'any' && task.context_type) {
+    if (task.context_type === context) { score += 5; reasons.push(context.replace('_', ' ')); }
+    else score -= 3;
+  }
+
+  if (task.deferral_count > 0) score -= Math.min(5, task.deferral_count);
+
+  return { score, reasons };
+}
+
+function buildRecommendations(availMins, context) {
+  const active    = tasks.filter(t => !t.completed);
+  const hasUrgent = active.some(t => isOverdue(t.due_date) || isTodayDate(t.due_date));
+  const scored    = active.map(task => {
+    const { score, reasons } = scoreTask(task, availMins, context);
+    return { task, score: score + (!task.due_date && hasUrgent ? -3 : 0), reasons };
+  });
+  return scored.sort((a, b) => b.score - a.score).slice(0, 3).filter(r => r.score > 0);
+}
+
+function toggleRec() {
+  const body    = document.getElementById('rec-body');
+  const chevron = document.getElementById('rec-chevron');
+  const open    = !body.classList.contains('open');
+  body.classList.toggle('open', open);
+  chevron.classList.toggle('open', open);
+  if (open) renderRecommended();
+}
+
+function renderRecommended() {
+  const out = document.getElementById('rec-output');
+  if (!out) return;
+  const availMins = parseInt(document.getElementById('rec-time').value) || 30;
+  const context   = document.getElementById('rec-context').value || 'any';
+  const recs      = buildRecommendations(availMins, context);
+  out.innerHTML   = '';
+  if (!recs.length) {
+    out.innerHTML = '<div class="rec-empty">No tasks to recommend</div>';
+    return;
+  }
+  recs.forEach((r, i) => {
+    const item = document.createElement('div');
+    item.className = 'rec-item' + (i === 0 ? ' primary' : '');
+    item.innerHTML = `
+      <span class="rec-rank">${i === 0 ? '→' : i + 1}</span>
+      <div class="rec-info">
+        <div class="rec-title">${esc(r.task.title)}</div>
+        <div class="rec-reason">${r.reasons.slice(0, 3).join(' · ') || 'General task'}</div>
+      </div>`;
+    out.appendChild(item);
+  });
+}
+
+// ── FOCUS MODE ────────────────────────────────────────────────────────────────
+function toggleAddCal() {
+  addToCalFlag = !addToCalFlag;
+  const track = document.getElementById('toggle-add-cal');
+  const thumb = document.getElementById('toggle-add-cal-thumb');
+  track.style.background = addToCalFlag ? 'var(--accent-dark)' : 'var(--border)';
+  thumb.style.left = addToCalFlag ? '20px' : '2px';
+}
+
+function toggleFocusMode() {
+  focusModeOn = !focusModeOn;
+  document.getElementById('toggle-focus').classList.toggle('on', focusModeOn);
+  renderCombined();
+}
+
+// ── PLAN TAB (Radar) ──────────────────────────────────────────────────────────
+function renderPlan() {
+  const el = document.getElementById('plan-content');
+  if (!el) return;
+  el.innerHTML = '';
+
+  const active = tasks.filter(t => !t.completed);
+
+  // Build 7-day slot data
+  const dayData = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const dateStr  = offsetDate(i);
+
+    const taskList = i === 0
+      ? active.filter(t => t.due_date === dateStr || isOverdue(t.due_date))
+      : active.filter(t => t.due_date === dateStr);
+
+    const must   = taskList.filter(t => t.priority === 'must').length;
+    const should = taskList.filter(t => t.priority === 'should').length;
+    const could  = taskList.filter(t => t.priority === 'could').length;
+    const score  = must * PRIORITY_WEIGHT.must + should * PRIORITY_WEIGHT.should + could * PRIORITY_WEIGHT.could;
+
+    dayData.push({ i, d, dateStr, must, should, could, score });
+  }
+
+  const maxScore = Math.max(...dayData.map(d => d.score));
+
+  const list = document.createElement('div');
+  list.className = 'radar-list';
+
+  dayData.forEach(({ i, d, dateStr, must, should, could, score }) => {
+    const isHeaviest = score > 0 && score === maxScore;
+
+    let dayName;
+    if (i === 0)      dayName = 'Today';
+    else if (i === 1) dayName = 'Tomorrow';
+    else              dayName = d.toLocaleDateString('en-SG', { weekday: 'long' });
+
+    const dateFmt = d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+
+    let loadClass = '';
+    if (score >= 7)      loadClass = 'load-heavy';
+    else if (score >= 3) loadClass = 'load-busy';
+    else if (score > 0)  loadClass = 'load-light';
+
+    const row = document.createElement('div');
+    row.className = 'radar-day ' + loadClass;
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => openRadarModal(dayName, dateFmt, dateStr, i === 0));
+
+    row.innerHTML = `
+      <div class="radar-day-label">
+        <div class="radar-day-name">${dayName}</div>
+        <div class="radar-day-date">${dateFmt}</div>
+      </div>
+      <div class="radar-counts">
+        <div class="radar-count">
+          <span class="radar-count-num${must > 0 ? ' must' : ''}">${must}</span>
+          <span class="radar-count-lbl">Must</span>
+        </div>
+        <div class="radar-count">
+          <span class="radar-count-num${should > 0 ? ' should' : ''}">${should}</span>
+          <span class="radar-count-lbl">Should</span>
+        </div>
+        <div class="radar-count">
+          <span class="radar-count-num${could > 0 ? ' could' : ''}">${could}</span>
+          <span class="radar-count-lbl">Could</span>
+        </div>
+      </div>`;
+
+    list.appendChild(row);
+  });
+
+  el.appendChild(list);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildCard(task, showBadge = false, isOverdueCard = false) {
+  const subs       = subtasks.filter(s => s.task_id === task.id);
+  const dueLabel   = formatDue(task.due_date);
+  const timeLabel  = formatTime(task.due_time);
+  const overdue    = !task.completed && isOverdue(task.due_date);
+  const isDone     = task.completed;
+  const state      = isOverdueCard ? overdueState(task.due_date) : 'overdue';
+  const days       = isOverdueCard ? overdueDays(task.due_date) : 0;
+  const isStale    = state === 'stale';
+
+  const subTotal   = subs.length;
+  const subDone    = subs.filter(s => s.completed).length;
+  const allSubDone = subTotal > 0 && subDone === subTotal;
+
+  const card = document.createElement('div');
+  card.className = 'task-card' + (isOverdueCard ? ` overdue-card ${state}` : '');
+  card.dataset.id = task.id;
+
+  // Meta row
+  let meta = `<span class="priority-dot ${task.priority}"></span>`;
+  if (showBadge) meta += `<span class="cat-badge">${task.category}</span>`;
+  if (dueLabel) {
+    const timeStr = timeLabel ? ` ${timeLabel}` : '';
+    meta += `<span class="task-due ${overdue ? 'overdue' : ''}">${dueLabel}${timeStr}</span>`;
+  }
+  if (isOverdueCard) {
+    meta += `<span class="overdue-age ${state}">${days}d overdue</span>`;
+  }
+  if (subTotal > 0) {
+    meta += `<span class="subtask-progress ${allSubDone ? 'done-all' : ''}">${subDone}/${subTotal}</span>`;
+  }
+
+  const tp = !isDone ? formatTimePressure(task.due_date, task.due_time) : null;
+  if (tp) {
+    meta += `<span class="time-pressure ${tp.state}">${tp.text}</span>`;
+  }
+  if (task.deferral_count > 0) {
+    const repeatClass = task.deferral_count >= 3 ? ' repeat' : '';
+    meta += `<span class="defer-badge${repeatClass}">Deferred ${task.deferral_count}×</span>`;
+  }
+
+  // Subtask HTML
+  let subsHtml = '';
+  if (subs.length) {
+    subsHtml = `<div class="subtask-list">${subs.map(s =>
+      `<div class="subtask-item">
+        <div class="subtask-check ${s.completed ? 'checked' : ''}" onclick="toggleSubtask('${s.id}')"></div>
+        <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
+      </div>`
+    ).join('')}</div>`;
+  }
+
+  // Stale prompt
+  const staleHtml = isStale ? `
+    <div class="stale-prompt">
+      <p>Still relevant?</p>
+      <div class="stale-prompt-actions">
+        <button class="btn-stale-keep"   onclick="staleKeep('${task.id}')">Keep</button>
+        <button class="btn-stale-extend" onclick="openExtendModal('${task.id}')">Extend</button>
+        <button class="btn-stale-remove" onclick="confirmDelete('${task.id}')">Remove</button>
+      </div>
+    </div>` : '';
+
+  // Cal button
+  const calBtn = !isDone
+    ? task.in_calendar
+      ? `<button class="btn-cal added" disabled>In Cal</button>`
+      : `<button class="btn-cal" onclick="addToCalendar('${task.id}')">+ Cal</button>`
+    : '';
+
+  // Action buttons
+  const actions = isDone
+    ? `<button class="btn-restore" onclick="toggleTask('${task.id}')">Restore</button>
+       <button class="btn-delete"  onclick="confirmDelete('${task.id}')">Delete</button>`
+    : isOverdueCard
+    ? `<button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
+       <button class="btn-extend" onclick="openExtendModal('${task.id}')">Extend</button>
+       ${calBtn}
+       <button class="btn-delete" onclick="confirmDelete('${task.id}')">Remove</button>`
+    : `<button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
+       ${calBtn}
+       <button class="btn-delete" onclick="confirmDelete('${task.id}')">Delete</button>`;
+
+  card.innerHTML = `
+    <div class="task-main" onclick="toggleDetail(this)">
+      <div class="task-checkbox ${task.completed ? 'checked' : ''}"
+          onclick="event.stopPropagation(); toggleTask('${task.id}')"></div>
+      <div class="task-body">
+        <div class="task-title ${isDone ? 'done' : ''}">${esc(task.title)}</div>
+        <div class="task-meta">${meta}</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="task-detail">
+      ${staleHtml}
+      ${task.notes ? `<div class="task-notes">${esc(task.notes)}</div>` : ''}
+      ${subsHtml}
+      ${!isDone ? `<div class="add-subtask-row">
+        <input class="add-subtask-input" placeholder="Add subtask…"
+               onkeydown="if(event.key==='Enter')submitSubtask('${task.id}',this)" />
+        <button class="btn-add-sub" onclick="submitSubtask('${task.id}',this.previousElementSibling)">Add</button>
+      </div>` : ''}
+      <div class="task-actions">${actions}</div>
+    </div>`;
+
+  return card;
+}
+
+function renderList(containerId, list, emptyMsg, showBadge = false) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+
+  function sortByDateThenPriority(a, b) {
+    if (!a.due_date && !b.due_date) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    const dateDiff = new Date(a.due_date) - new Date(b.due_date);
+    if (dateDiff !== 0) return dateDiff;
+    return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+  }
+
+  const overdue = list.filter(t => isOverdue(t.due_date)).sort(sortByDateThenPriority);
+  const active  = list.filter(t => !isOverdue(t.due_date)).sort(sortByDateThenPriority);
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>${emptyMsg}</p></div>`;
+    return;
+  }
+
+  if (overdue.length) {
+    const label = document.createElement('div');
+    label.className = 'overdue-label';
+    label.textContent = 'Overdue';
+    el.appendChild(label);
+    const overdueList = document.createElement('div');
+    overdueList.className = 'task-list';
+    overdue.forEach(t => overdueList.appendChild(buildCard(t, showBadge, true)));
+    el.appendChild(overdueList);
+  }
+
+  if (active.length) {
+    if (overdue.length) {
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = 'Active';
+      el.appendChild(label);
+    }
+    const activeList = document.createElement('div');
+    activeList.className = 'task-list';
+    active.forEach(t => activeList.appendChild(buildCard(t, showBadge, false)));
+    el.appendChild(activeList);
+  }
+}
+
+function renderCombined() {
+  const el = document.getElementById('list-combined');
+  el.innerHTML = '';
+
+  const base   = tasks.filter(t => !t.completed && (!todayFilter.combined || isTodayDate(t.due_date)));
+  const active = base.sort((a, b) => {
+    if (!a.due_date && !b.due_date) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    const dateDiff = new Date(a.due_date) - new Date(b.due_date);
+    if (dateDiff !== 0) return dateDiff;
+    return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+  });
+
+  if (!active.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>${todayFilter.combined ? 'Nothing due today' : 'All clear'}</p></div>`;
+    return;
+  }
+
+  const overdue   = active.filter(t => isOverdue(t.due_date));
+  const nonOverdue = active.filter(t => !isOverdue(t.due_date));
+
+  if (overdue.length) {
+    const label = document.createElement('div');
+    label.className = 'overdue-label';
+    label.textContent = 'Overdue';
+    el.appendChild(label);
+    const overdueList = document.createElement('div');
+    overdueList.className = 'task-list';
+    overdue.forEach(t => overdueList.appendChild(buildCard(t, true, true)));
+    el.appendChild(overdueList);
+  }
+
+  const priorities = focusModeOn ? ['must'] : ['must', 'should', 'could'];
+  const groups = { must: [], should: [], could: [] };
+  nonOverdue.forEach(t => groups[t.priority] && groups[t.priority].push(t));
+
+  priorities.forEach(p => {
+    if (!groups[p].length) return;
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = { must: 'Must Do', should: 'Should Do', could: 'Could Do' }[p];
+    el.appendChild(label);
+    const list = document.createElement('div');
+    list.className = 'task-list';
+    groups[p].forEach(t => list.appendChild(buildCard(t, true, false)));
+    el.appendChild(list);
+  });
+
+  if (focusModeOn && (groups.should.length || groups.could.length)) {
+    const hidden = groups.should.length + groups.could.length;
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--text-light);padding:10px 2px;text-align:center';
+    note.textContent = `${hidden} lower-priority task${hidden > 1 ? 's' : ''} hidden in Focus mode`;
+    el.appendChild(note);
+  }
+}
+
+function renderLoadIndicator() {
+  const el    = document.getElementById('load-indicator');
+  const today = tasks.filter(t => !t.completed && isTodayDate(t.due_date));
+  const score = today.reduce((sum, t) => sum + (PRIORITY_WEIGHT[t.priority] || 0), 0);
+  const mustCount = today.filter(t => t.priority === 'must').length;
+
+  el.className = 'load-indicator';
+  if (score >= 7) {
+    el.className += ' heavy';
+    el.textContent = `Heavy day${mustCount ? ` — ${mustCount} must task${mustCount > 1 ? 's' : ''}` : ''}`;
+  } else if (score >= 3) {
+    el.className += ' busy';
+    el.textContent = 'Busy day';
+  }
+  // Below threshold: stays hidden (display:none)
+}
+
+function renderDone() {
+  const statEl = document.getElementById('done-stat');
+  const done   = tasks
+    .filter(t => t.completed)
+    .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+
+  const now        = new Date();
+  const monthCount = tasks.filter(t => {
+    if (!t.completed || !t.completed_at) return false;
+    const d = new Date(t.completed_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+  const monthName = now.toLocaleDateString('en-SG', { month: 'long' });
+
+  if (statEl) {
+    statEl.innerHTML = monthCount > 0
+      ? `<div class="done-stat"><span class="done-stat-num">${monthCount}</span><span class="done-stat-label">completed in ${monthName}</span></div>`
+      : `<div class="done-stat"><span class="done-stat-label">No completions in ${monthName} yet</span></div>`;
+  }
+
+  renderList('list-done', done, 'Nothing completed yet', true);
+}
+
+function isTodayDate(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date();
+  const d     = new Date(dateStr + 'T00:00:00');
+  return d.getFullYear() === today.getFullYear() &&
+         d.getMonth()    === today.getMonth() &&
+         d.getDate()     === today.getDate();
+}
+
+function toggleToday(tab) {
+  todayFilter[tab] = !todayFilter[tab];
+  const btn = document.getElementById('toggle-' + tab);
+  btn.classList.toggle('on', todayFilter[tab]);
+  renderAll();
+}
+
+function renderAll() {
+  const active = tasks.filter(t => !t.completed);
+
+  const personal = todayFilter.personal
+    ? active.filter(t => t.category === 'personal' && isTodayDate(t.due_date))
+    : active.filter(t => t.category === 'personal');
+  renderList('list-personal', personal, todayFilter.personal ? 'Nothing due today' : 'No personal tasks');
+
+  const work = todayFilter.work
+    ? active.filter(t => t.category === 'work' && isTodayDate(t.due_date))
+    : active.filter(t => t.category === 'work');
+  renderList('list-work', work, todayFilter.work ? 'Nothing due today' : 'No work tasks');
+
+  renderCombined();
+  renderLoadIndicator();
+  renderDone();
+  renderPlan();
+  const recBody = document.getElementById('rec-body');
+  if (recBody && recBody.classList.contains('open')) renderRecommended();
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function toggleDetail(mainEl) {
+  const detail  = mainEl.nextElementSibling;
+  const chevron = mainEl.querySelector('.chevron');
+  const open    = !detail.classList.contains('open');
+  detail.classList.toggle('open', open);
+  if (chevron) chevron.classList.toggle('open', open);
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function confirmDelete(id) {
+  if (confirm('Delete this task?')) deleteTask(id);
+}
+
+// ── CLEAR TAB ─────────────────────────────────────────────────────────────────
+let clearedTasks    = [];
+let clearedSubtasks = [];
+let clearUndoTimer  = null;
+
+async function clearTab(scope) {
+  const active = tasks.filter(t => !t.completed);
+  const toDelete = scope === 'all'
+    ? active
+    : active.filter(t => t.category === scope);
+
+  if (!toDelete.length) { showToast('Nothing to clear'); return; }
+
+  const ids = toDelete.map(t => t.id);
+  clearedTasks    = toDelete;
+  clearedSubtasks = subtasks.filter(s => ids.includes(s.task_id));
+
+  // Delete from Supabase
+  await db.from('slate_tasks').delete().in('id', ids);
+  tasks    = tasks.filter(t => !ids.includes(t.id));
+  subtasks = subtasks.filter(s => !ids.includes(s.task_id));
+  renderAll();
+
+  // Show undo toast
+  const label = scope === 'all' ? 'All tasks' : scope === 'personal' ? 'Personal tasks' : 'Work tasks';
+  showUndoToast(`${label} cleared`, 5000);
+}
+
+async function undoClear() {
+  if (!clearedTasks.length) return;
+  hideUndoToast();
+  if (clearUndoTimer) { clearTimeout(clearUndoTimer); clearUndoTimer = null; }
+
+  // Re-insert tasks then subtasks
+  const { data: restored } = await db.from('slate_tasks').insert(
+    clearedTasks.map(({ id, ...rest }) => rest)
+  ).select();
+
+  // Map old id → new id to re-attach subtasks
+  if (restored && clearedSubtasks.length) {
+    const idMap = {};
+    clearedTasks.forEach((t, i) => { if (restored[i]) idMap[t.id] = restored[i].id; });
+    const restoredSubs = clearedSubtasks.map(({ id, task_id, ...rest }) => ({
+      ...rest,
+      task_id: idMap[task_id] || task_id
+    }));
+    await db.from('slate_subtasks').insert(restoredSubs);
+  }
+
+  clearedTasks    = [];
+  clearedSubtasks = [];
+  await loadAll();
+  showToast('Restored');
+}
+
+function showUndoToast(msg, duration) {
+  if (clearUndoTimer) { clearTimeout(clearUndoTimer); clearUndoTimer = null; }
+  const el = document.getElementById('toast-undo');
+  document.getElementById('toast-undo-msg').textContent = msg;
+  el.classList.add('show');
+  clearUndoTimer = setTimeout(() => {
+    hideUndoToast();
+    clearedTasks    = [];
+    clearedSubtasks = [];
+  }, duration);
+}
+
+function hideUndoToast() {
+  document.getElementById('toast-undo').classList.remove('show');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function openAddModal() {
+  editingId        = null;
+  selectedCat      = lastCat;
+  selectedPriority = lastPriority;
+  document.getElementById('input-title').value    = '';
+  document.getElementById('input-due').value      = '';
+  document.getElementById('input-time').value     = '';
+  document.getElementById('input-estimate').value = '';
+  document.getElementById('input-context').value  = '';
+  document.getElementById('input-notes').value    = '';
+  document.getElementById('modal-title').textContent  = 'New Task';
+  document.getElementById('modal-submit').textContent = 'Add Task';
+  setSegActive('cat', lastCat);
+  setSegActive('priority', lastPriority);
+  // Reset cal toggle
+  addToCalFlag = false;
+  document.getElementById('toggle-add-cal').style.background = 'var(--border)';
+  document.getElementById('toggle-add-cal-thumb').style.left = '2px';
+  document.getElementById('task-modal').classList.add('open');
+  setTimeout(() => document.getElementById('input-title').focus(), 120);
+}
+
+function openEditModal(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  editingId        = id;
+  selectedCat      = task.category;
+  selectedPriority = task.priority;
+  document.getElementById('input-title').value    = task.title;
+  document.getElementById('input-due').value      = task.due_date         || '';
+  document.getElementById('input-time').value     = task.due_time         || '';
+  document.getElementById('input-estimate').value = task.estimated_minutes || '';
+  document.getElementById('input-context').value  = task.context_type     || '';
+  document.getElementById('input-notes').value    = task.notes            || '';
+  document.getElementById('modal-title').textContent  = 'Edit Task';
+  document.getElementById('modal-submit').textContent = 'Save Changes';
+  setSegActive('cat', task.category);
+  setSegActive('priority', task.priority);
+  document.getElementById('task-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('task-modal').classList.remove('open');
+}
+
+let extendingId = null;
+function openExtendModal(id) {
+  extendingId = id;
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  document.getElementById('extend-date').value = tomorrow.toISOString().split('T')[0];
+  document.getElementById('extend-modal').classList.add('open');
+}
+function closeExtendModal() {
+  document.getElementById('extend-modal').classList.remove('open');
+  extendingId = null;
+}
+async function extendQuick(days) {
+  if (!extendingId) return;
+  const d = new Date(); d.setDate(d.getDate() + days);
+  const date  = d.toISOString().split('T')[0];
+  const id    = extendingId;
+  const count = (tasks.find(t => t.id === id)?.deferral_count || 0) + 1;
+  closeExtendModal();
+  await updateTask(id, { due_date: date, deferral_count: count });
+  showToast('Due date extended');
+}
+async function submitExtend() {
+  const date = document.getElementById('extend-date').value;
+  if (!date || !extendingId) return;
+  const id    = extendingId;
+  const count = (tasks.find(t => t.id === id)?.deferral_count || 0) + 1;
+  closeExtendModal();
+  await updateTask(id, { due_date: date, deferral_count: count });
+  showToast('Due date extended');
+}
+
+
+async function addToCalendar(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+
+  function doInsert(token) {
+    const event = {
+      summary: task.title,
+      description: task.notes || '',
+    };
+
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (task.due_date) {
+      if (task.due_time) {
+        const start = `${task.due_date}T${task.due_time}:00`;
+        const endD  = new Date(`${task.due_date}T${task.due_time}:00`);
+        endD.setMinutes(endD.getMinutes() + (task.estimated_minutes || 30));
+        const pad = n => String(n).padStart(2, '0');
+        const endStr = `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}T${pad(endD.getHours())}:${pad(endD.getMinutes())}:00`;
+        event.start = { dateTime: start, timeZone: tz };
+        event.end   = { dateTime: endStr, timeZone: tz };
+      } else {
+        // all-day: end date must be day after
+        const endD = new Date(task.due_date + 'T00:00:00');
+        endD.setDate(endD.getDate() + 1);
+        event.start = { date: task.due_date };
+        event.end   = { date: endD.toISOString().split('T')[0] };
+      }
+    } else {
+      const today = offsetDate(0);
+      const tomorrow = offsetDate(1);
+      event.start = { date: today };
+      event.end   = { date: tomorrow };
+    }
+
+    fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(event)
+    })
+    .then(r => r.json())
+    .then(async data => {
+      if (data.id) {
+        await updateTask(id, { in_calendar: true });
+        showToast('Added to Google Calendar');
+      } else {
+        console.error('Calendar API error:', data);
+        showToast('Cal error: ' + (data.error?.message || 'unknown'));
+      }
+    })
+    .catch(() => showToast('Calendar request failed'));
+  }
+
+  if (gcalToken) {
+    doInsert(gcalToken);
+    return;
+  }
+
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GCAL_CLIENT_ID,
+    scope: GCAL_SCOPE,
+    callback: (resp) => {
+      if (resp.error) { showToast('Calendar auth failed'); return; }
+      gcalToken = resp.access_token;
+      doInsert(gcalToken);
+    }
+  });
+  client.requestAccessToken();
+}
+
+async function staleKeep(id) {
+  // Snooze stale prompt by bumping updated_at (touch the task)
+  await updateTask(id, { notes: tasks.find(t => t.id === id)?.notes ?? null });
+  showToast('Kept');
+}
+
+function setSegActive(type, value) {
+  const attr = type === 'cat' ? 'data-cat' : 'data-priority';
+  document.querySelectorAll(`[${attr}]`).forEach(b =>
+    b.classList.toggle('active', b.getAttribute(attr) === value)
+  );
+}
+
+function selectSeg(type, btn) {
+  if (type === 'cat')      selectedCat      = btn.dataset.cat;
+  if (type === 'priority') selectedPriority = btn.dataset.priority;
+  setSegActive(type, type === 'cat' ? btn.dataset.cat : btn.dataset.priority);
+}
+
+async function submitTask() {
+  const title = document.getElementById('input-title').value.trim();
+  if (!title) { document.getElementById('input-title').focus(); return; }
+
+  const estVal = parseInt(document.getElementById('input-estimate').value);
+  const data = {
+    title,
+    category:           selectedCat,
+    priority:           selectedPriority,
+    due_date:           document.getElementById('input-due').value      || null,
+    due_time:           document.getElementById('input-time').value     || null,
+    estimated_minutes:  isNaN(estVal) ? null : estVal,
+    context_type:       document.getElementById('input-context').value  || null,
+    notes:              document.getElementById('input-notes').value.trim() || null,
+    completed:          false,
+    completed_at:       null,
+    in_calendar:        editingId ? (tasks.find(t => t.id === editingId)?.in_calendar ?? false) : false,
+    deferral_count:     editingId ? (tasks.find(t => t.id === editingId)?.deferral_count ?? 0) : 0
+  };
+  const shouldAddToCal = !editingId && addToCalFlag;
+  lastCat      = selectedCat;
+  lastPriority = selectedPriority;
+  closeModal();
+
+  if (editingId) {
+    await updateTask(editingId, data);
+    showToast('Task updated');
+  } else {
+    await addTask(data);
+    if (shouldAddToCal) {
+      const newTask = tasks[tasks.length - 1];
+      if (newTask) addToCalendar(newTask.id);
+    }
+  }
+}
+
+async function submitSubtask(taskId, input) {
+  const title = input.value.trim();
+  if (!title) return;
+  input.value = '';
+  await addSubtask(taskId, title);
+}
+
+// ── RADAR MODAL ───────────────────────────────────────────────────────────────
+function openRadarModal(dayName, dateFmt, dateStr, isToday) {
+  const active      = tasks.filter(t => !t.completed);
+  const overdueTasks = active.filter(t => isOverdue(t.due_date));
+  const dayTasks     = active.filter(t => t.due_date === dateStr);
+
+  document.getElementById('radar-modal-title').textContent = dayName;
+  document.getElementById('radar-modal-date').textContent  = dateFmt;
+
+  const body = document.getElementById('radar-modal-body');
+  body.innerHTML = '';
+
+  if (!dayTasks.length && !overdueTasks.length) {
+    body.innerHTML = '<div class="radar-modal-empty">Nothing scheduled</div>';
+    document.getElementById('radar-modal').classList.add('open');
+    return;
+  }
+
+  function buildPriorityGroups(taskList, showOverdueBadge) {
+    const groups = { must: [], should: [], could: [] };
+    taskList.forEach(t => groups[t.priority] && groups[t.priority].push(t));
+    const labels = { must: 'Must', should: 'Should', could: 'Could' };
+    ['must', 'should', 'could'].forEach(p => {
+      if (!groups[p].length) return;
+      const header = document.createElement('div');
+      header.className = 'radar-modal-group-label';
+      header.textContent = labels[p];
+      body.appendChild(header);
+      groups[p].forEach(t => {
+        const overdue = isOverdue(t.due_date);
+        const dueLabel = showOverdueBadge && overdue
+          ? `${overdueDays(t.due_date)}d overdue`
+          : (t.due_time ? formatTime(t.due_time) : '');
+        const item = document.createElement('div');
+        item.className = 'radar-modal-item';
+        item.innerHTML = `
+          <span class="priority-dot ${p}"></span>
+          <span class="radar-modal-title">${esc(t.title)}</span>
+          <span class="radar-modal-cat">${t.category}</span>
+          ${dueLabel ? `<span class="radar-modal-due${overdue ? ' overdue' : ''}">${dueLabel}</span>` : ''}`;
+        body.appendChild(item);
+      });
+    });
+  }
+
+  if (overdueTasks.length) {
+    const overdueHeader = document.createElement('div');
+    overdueHeader.className = 'radar-modal-group-label';
+    overdueHeader.style.cssText = 'color:var(--high);margin-bottom:6px';
+    overdueHeader.textContent = 'Overdue';
+    body.appendChild(overdueHeader);
+    buildPriorityGroups(overdueTasks, true);
+  }
+
+  if (dayTasks.length) {
+    const dayHeader = document.createElement('div');
+    dayHeader.className = 'radar-modal-group-label';
+    dayHeader.style.cssText = 'margin-top:' + (overdueTasks.length ? '14px' : '0') + ';margin-bottom:6px';
+    dayHeader.textContent = dayName;
+    body.appendChild(dayHeader);
+    buildPriorityGroups(dayTasks, false);
+  }
+
+  document.getElementById('radar-modal').classList.add('open');
+}
+
+function closeRadarModal() {
+  document.getElementById('radar-modal').classList.remove('open');
+}
+
+// ── REAL-TIME ─────────────────────────────────────────────────────────────────
+function subscribeRealtime() {
+  db.channel('slate-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'slate_tasks' },    loadAll)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'slate_subtasks' }, loadAll)
+    .subscribe();
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+document.getElementById('header-date').textContent = new Date()
+  .toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' })
+  .toUpperCase();
+
+document.getElementById('task-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+document.getElementById('input-title').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); submitTask(); }
+});
+document.getElementById('extend-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeExtendModal();
+});
+document.getElementById('radar-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeRadarModal();
+});
+
+loadAll();
+subscribeRealtime();
+</script>
+</body>
+</html>
