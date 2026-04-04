@@ -1965,7 +1965,7 @@ async function addToCalendar(id) {
     .then(r => r.json())
     .then(async data => {
       if (data.id) {
-        await updateTask(id, { in_calendar: true });
+        await updateTask(id, { in_calendar: true, calendar_event_id: data.id });
         showToast('Added to Google Calendar');
       } else {
         console.error('Calendar API error:', JSON.stringify(data));
