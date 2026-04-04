@@ -1210,12 +1210,25 @@ async function loadAll() {
   renderAll();
 }
 
+function deleteCalEvents(taskList) {
+  if (!gcalToken) return;
+  taskList.forEach(t => {
+    if (t.in_calendar && t.calendar_event_id) {
+      fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${t.calendar_event_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${gcalToken}` }
+      }).catch(() => {});
+    }
+  });
+}
+
 async function clearDone() {
   const done = tasks.filter(t => t.completed);
   if (!done.length) { showToast('Nothing to clear'); return; }
   const ids = done.map(t => t.id);
   clearedTasks    = done;
   clearedSubtasks = subtasks.filter(s => ids.includes(s.task_id));
+  deleteCalEvents(done);
   await db.from('slate_tasks').delete().in('id', ids);
   tasks    = tasks.filter(t => !ids.includes(t.id));
   subtasks = subtasks.filter(s => !ids.includes(s.task_id));
