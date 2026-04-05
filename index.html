@@ -1141,6 +1141,7 @@ let selectedPriority = 'must';
 const GCAL_CLIENT_ID  = '535607802349-mjfrpdddsa1mpenitts3c0050fglrtq8.apps.googleusercontent.com';
 const GCAL_SCOPE      = 'https://www.googleapis.com/auth/calendar.events';
 let   gcalToken       = null;
+let   gcalTokenExpiry = 0;
 
 const PRIORITY_ORDER  = { must: 0, should: 1, could: 2 };
 const PRIORITY_WEIGHT = { must: 2, should: 1, could: 0.5 };
