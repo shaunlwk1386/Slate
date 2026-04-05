@@ -1595,11 +1595,13 @@ function buildCard(task, showBadge = false, isOverdueCard = false) {
     ? `<button class="btn-restore" onclick="toggleTask('${task.id}')">Restore</button>
        <button class="btn-delete"  onclick="confirmDelete('${task.id}')">Delete</button>`
     : isOverdueCard
-    ? `<button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
+    ? `<button class="btn-done"   onclick="toggleTask('${task.id}')">Done</button>
+       <button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
        <button class="btn-extend" onclick="openExtendModal('${task.id}')">Extend</button>
        ${calBtn}
        <button class="btn-delete" onclick="confirmDelete('${task.id}')">Remove</button>`
-    : `<button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
+    : `<button class="btn-done"   onclick="toggleTask('${task.id}')">Done</button>
+       <button class="btn-edit"   onclick="openEditModal('${task.id}')">Edit</button>
        ${calBtn}
        <button class="btn-delete" onclick="confirmDelete('${task.id}')">Delete</button>`;
 
