@@ -2034,8 +2034,25 @@ async function addToCalendar(id) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(event)
     })
-    .then(r => r.json())
+    .then(r => {
+      if (r.status === 401) {
+        gcalToken = null; gcalTokenExpiry = 0;
+        const c = google.accounts.oauth2.initTokenClient({
+          client_id: GCAL_CLIENT_ID, scope: GCAL_SCOPE,
+          callback: (resp) => {
+            if (resp.error) { showToast('Calendar auth failed'); return; }
+            gcalToken = resp.access_token;
+            gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
+            doInsert(gcalToken);
+          }
+        });
+        c.requestAccessToken();
+        return null;
+      }
+      return r.json();
+    })
     .then(async data => {
+      if (!data) return;
       if (data.id) {
         await updateTask(id, { in_calendar: true, calendar_event_id: data.id });
         showToast('Added to Google Calendar');
@@ -2047,10 +2064,11 @@ async function addToCalendar(id) {
     .catch(() => showToast('Calendar request failed'));
   }
 
-  if (gcalToken) {
+  if (gcalToken && Date.now() < gcalTokenExpiry) {
     doInsert(gcalToken);
     return;
   }
+  gcalToken = null;
 
   const client = google.accounts.oauth2.initTokenClient({
     client_id: GCAL_CLIENT_ID,
@@ -2058,6 +2076,7 @@ async function addToCalendar(id) {
     callback: (resp) => {
       if (resp.error) { showToast('Calendar auth failed'); return; }
       gcalToken = resp.access_token;
+      gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
       doInsert(gcalToken);
     }
   });
