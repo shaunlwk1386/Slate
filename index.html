@@ -2131,7 +2131,7 @@ async function removeFromCalendar(id) {
     scope: GCAL_SCOPE,
     callback: (resp) => {
       if (resp.error) { showToast('Calendar auth failed'); return; }
-      gcalToken = resp.access_access_token;
+      gcalToken = resp.access_token;
       gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
       doDelete(gcalToken);
     }
