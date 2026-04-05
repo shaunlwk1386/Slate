@@ -148,7 +148,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .task-title.done { text-decoration: line-through; color: var(--text-muted); }
+    .task-title.done { text-decoration: none; color: var(--text-muted); }
     .task-meta {
       display: flex;
       align-items: center;
@@ -157,6 +157,22 @@
       flex-wrap: wrap;
     }
 
+    .priority-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .priority-label.must   { background: #fef2f2; color: var(--high); }
+    .priority-label.should { background: #fffbeb; color: #d97706; }
+    .priority-label.could  { background: #f0fdf4; color: var(--done-color); }
+    .done-completed-at {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
     .priority-dot {
       width: 6px;
       height: 6px;
@@ -802,14 +818,15 @@
       padding: 14px 2px 6px;
       display: flex;
       align-items: baseline;
-      gap: 6px;
+      gap: 4px;
     }
     .done-stat-num {
       font-family: 'DM Mono', monospace;
-      font-size: 26px;
+      font-size: 36px;
       font-weight: 500;
       color: var(--done-color);
       line-height: 1;
+      margin-left: 4px;
     }
     .done-stat-label {
       font-size: 12px;
@@ -1618,6 +1635,10 @@ function buildCard(task, showBadge = false, isOverdueCard = false) {
     </div>
     <div class="task-detail">
       ${staleHtml}
+      ${isDone ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span class="priority-label ${task.priority}">${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}</span>
+        ${task.completed_at ? `<span class="done-completed-at">Completed ${new Date(task.completed_at).toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}
+      </div>` : ''}
       ${task.notes ? `<div class="task-notes">${esc(task.notes)}</div>` : ''}
       ${subsHtml}
       ${!isDone ? `<div class="add-subtask-row">
