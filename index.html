@@ -2096,6 +2096,20 @@ async function removeFromCalendar(id) {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(async r => {
+      if (r.status === 401) {
+        gcalToken = null; gcalTokenExpiry = 0;
+        const c = google.accounts.oauth2.initTokenClient({
+          client_id: GCAL_CLIENT_ID, scope: GCAL_SCOPE,
+          callback: (resp) => {
+            if (resp.error) { showToast('Calendar auth failed'); return; }
+            gcalToken = resp.access_token;
+            gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
+            doDelete(gcalToken);
+          }
+        });
+        c.requestAccessToken();
+        return;
+      }
       if (r.ok || r.status === 404) {
         await updateTask(id, { in_calendar: false, calendar_event_id: null });
         showToast('Removed from Google Calendar');
@@ -2106,17 +2120,19 @@ async function removeFromCalendar(id) {
     .catch(() => showToast('Calendar request failed'));
   }
 
-  if (gcalToken) {
+  if (gcalToken && Date.now() < gcalTokenExpiry) {
     doDelete(gcalToken);
     return;
   }
+  gcalToken = null;
 
   const client = google.accounts.oauth2.initTokenClient({
     client_id: GCAL_CLIENT_ID,
     scope: GCAL_SCOPE,
     callback: (resp) => {
       if (resp.error) { showToast('Calendar auth failed'); return; }
-      gcalToken = resp.access_token;
+      gcalToken = resp.access_access_token;
+      gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
       doDelete(gcalToken);
     }
   });
