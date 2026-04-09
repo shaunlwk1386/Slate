@@ -1709,45 +1709,54 @@ function renderList(containerId, list, emptyMsg, showBadge = false) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
 
-  function sortByDateThenPriority(a, b) {
-    if (!a.due_date && !b.due_date) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    const dateDiff = new Date(a.due_date) - new Date(b.due_date);
-    if (dateDiff !== 0) return dateDiff;
-    return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-  }
-
-  const overdue = list.filter(t => isOverdue(t.due_date)).sort(sortByDateThenPriority);
-  const active  = list.filter(t => !isOverdue(t.due_date)).sort(sortByDateThenPriority);
-
   if (!list.length) {
     el.innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>${emptyMsg}</p></div>`;
     return;
   }
 
-  if (overdue.length) {
-    const label = document.createElement('div');
-    label.className = 'overdue-label';
-    label.textContent = 'Overdue';
-    el.appendChild(label);
-    const overdueList = document.createElement('div');
-    overdueList.className = 'task-list';
-    overdue.forEach(t => overdueList.appendChild(buildCard(t, showBadge, true)));
-    el.appendChild(overdueList);
-  }
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
 
-  if (active.length) {
-    if (overdue.length) {
-      const label = document.createElement('div');
-      label.className = 'section-label';
-      label.textContent = 'Active';
-      el.appendChild(label);
-    }
-    const activeList = document.createElement('div');
-    activeList.className = 'task-list';
-    active.forEach(t => activeList.appendChild(buildCard(t, showBadge, false)));
-    el.appendChild(activeList);
+  const dateMap = {};
+  const noDate  = [];
+  list.forEach(t => {
+    if (!t.due_date) { noDate.push(t); return; }
+    if (!dateMap[t.due_date]) dateMap[t.due_date] = [];
+    dateMap[t.due_date].push(t);
+  });
+
+  Object.keys(dateMap).sort((a, b) => a.localeCompare(b)).forEach(dateKey => {
+    const d    = new Date(dateKey + 'T00:00:00');
+    const diff = Math.round((d - today0) / 86400000);
+    const isPast = diff < 0;
+    let label;
+    if (diff === 0)       label = 'Today';
+    else if (diff === 1)  label = 'Tomorrow';
+    else if (diff === -1) label = 'Yesterday';
+    else                  label = d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const header = document.createElement('div');
+    header.className = 'section-label';
+    if (isPast) header.style.color = 'var(--high)';
+    header.textContent = label;
+    el.appendChild(header);
+
+    const sorted = [...dateMap[dateKey]].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+    sorted.forEach(t => taskList.appendChild(buildCard(t, showBadge, isPast)));
+    el.appendChild(taskList);
+  });
+
+  if (noDate.length) {
+    const header = document.createElement('div');
+    header.className = 'section-label';
+    header.textContent = 'No Date';
+    el.appendChild(header);
+    const sorted = [...noDate].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+    sorted.forEach(t => taskList.appendChild(buildCard(t, showBadge, false)));
+    el.appendChild(taskList);
   }
 }
 
@@ -1755,57 +1764,67 @@ function renderCombined() {
   const el = document.getElementById('list-combined');
   el.innerHTML = '';
 
-  const base   = tasks.filter(t => !t.completed && (!todayFilter.combined || isTodayDate(t.due_date)));
-  const active = base.sort((a, b) => {
-    if (!a.due_date && !b.due_date) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    const dateDiff = new Date(a.due_date) - new Date(b.due_date);
-    if (dateDiff !== 0) return dateDiff;
-    return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-  });
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  let base = tasks.filter(t => !t.completed && (!todayFilter.combined || isTodayDate(t.due_date)));
+  const allBase = base;
+  if (focusModeOn) base = base.filter(t => t.priority === 'must');
 
-  if (!active.length) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>${todayFilter.combined ? 'Nothing due today' : 'All clear'}</p></div>`;
+  if (!base.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>${todayFilter.combined ? 'Nothing due today' : focusModeOn ? 'No must tasks' : 'All clear'}</p></div>`;
     return;
   }
 
-  const overdue   = active.filter(t => isOverdue(t.due_date));
-  const nonOverdue = active.filter(t => !isOverdue(t.due_date));
-
-  if (overdue.length) {
-    const label = document.createElement('div');
-    label.className = 'overdue-label';
-    label.textContent = 'Overdue';
-    el.appendChild(label);
-    const overdueList = document.createElement('div');
-    overdueList.className = 'task-list';
-    overdue.forEach(t => overdueList.appendChild(buildCard(t, true, true)));
-    el.appendChild(overdueList);
-  }
-
-  const priorities = focusModeOn ? ['must'] : ['must', 'should', 'could'];
-  const groups = { must: [], should: [], could: [] };
-  nonOverdue.forEach(t => groups[t.priority] && groups[t.priority].push(t));
-
-  priorities.forEach(p => {
-    if (!groups[p].length) return;
-    const label = document.createElement('div');
-    label.className = 'section-label';
-    label.textContent = { must: 'Must Do', should: 'Should Do', could: 'Could Do' }[p];
-    el.appendChild(label);
-    const list = document.createElement('div');
-    list.className = 'task-list';
-    groups[p].forEach(t => list.appendChild(buildCard(t, true, false)));
-    el.appendChild(list);
+  const dateMap = {};
+  const noDate  = [];
+  base.forEach(t => {
+    if (!t.due_date) { noDate.push(t); return; }
+    if (!dateMap[t.due_date]) dateMap[t.due_date] = [];
+    dateMap[t.due_date].push(t);
   });
 
-  if (focusModeOn && (groups.should.length || groups.could.length)) {
-    const hidden = groups.should.length + groups.could.length;
-    const note = document.createElement('div');
-    note.style.cssText = 'font-size:11px;color:var(--text-light);padding:10px 2px;text-align:center';
-    note.textContent = `${hidden} lower-priority task${hidden > 1 ? 's' : ''} hidden in Focus mode`;
-    el.appendChild(note);
+  Object.keys(dateMap).sort((a, b) => a.localeCompare(b)).forEach(dateKey => {
+    const d    = new Date(dateKey + 'T00:00:00');
+    const diff = Math.round((d - today0) / 86400000);
+    const isPast = diff < 0;
+    let label;
+    if (diff === 0)       label = 'Today';
+    else if (diff === 1)  label = 'Tomorrow';
+    else if (diff === -1) label = 'Yesterday';
+    else                  label = d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const header = document.createElement('div');
+    header.className = 'section-label';
+    if (isPast) header.style.color = 'var(--high)';
+    header.textContent = label;
+    el.appendChild(header);
+
+    const sorted = [...dateMap[dateKey]].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+    sorted.forEach(t => taskList.appendChild(buildCard(t, true, isPast)));
+    el.appendChild(taskList);
+  });
+
+  if (noDate.length) {
+    const header = document.createElement('div');
+    header.className = 'section-label';
+    header.textContent = 'No Date';
+    el.appendChild(header);
+    const sorted = [...noDate].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+    sorted.forEach(t => taskList.appendChild(buildCard(t, true, false)));
+    el.appendChild(taskList);
+  }
+
+  if (focusModeOn) {
+    const hidden = allBase.filter(t => t.priority !== 'must').length;
+    if (hidden > 0) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--text-light);padding:10px 2px;text-align:center';
+      note.textContent = `${hidden} lower-priority task${hidden > 1 ? 's' : ''} hidden in Focus mode`;
+      el.appendChild(note);
+    }
   }
 }
 
