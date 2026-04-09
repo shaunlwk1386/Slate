@@ -799,19 +799,64 @@
     }
     .radar-modal-item {
       display: flex;
-      align-items: center;
-      gap: 10px;
+      flex-direction: column;
+      gap: 0;
       padding: 9px 12px;
       background: var(--bg);
       border-radius: 9px;
       margin-bottom: 5px;
+      cursor: pointer;
     }
     .radar-modal-item:last-child { margin-bottom: 0; }
+    .radar-modal-item-row { display: flex; align-items: center; gap: 10px; width: 100%; }
     .radar-modal-title { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .radar-modal-due { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
     .radar-modal-due.overdue { color: var(--high); }
     .radar-modal-cat { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; border-radius: 4px; background: var(--surface); color: var(--text-muted); flex-shrink: 0; }
     .radar-modal-empty { font-size: 13px; color: var(--text-light); padding: 4px 0; }
+    .radar-modal-chevron { font-size: 10px; color: var(--text-light); flex-shrink: 0; transition: transform 0.2s; }
+    .radar-modal-detail {
+      display: none;
+      padding-top: 10px;
+      margin-top: 10px;
+      border-top: 1px solid var(--border);
+      width: 100%;
+    }
+    .radar-modal-detail.open { display: block; }
+    .radar-modal-notes { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; white-space: pre-wrap; line-height: 1.5; }
+    .radar-modal-subs { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .radar-modal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Done stat row ── */
+    .done-stats-row {
+      display: flex;
+      gap: 0;
+      padding: 14px 2px 4px;
+    }
+    .done-stat-block {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 0 4px;
+      border-right: 1px solid var(--border);
+    }
+    .done-stat-block:last-child { border-right: none; }
+    .done-stat-block-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 28px;
+      font-weight: 500;
+      color: var(--done-color);
+      line-height: 1;
+    }
+    .done-stat-block-lbl {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+    }
 
     /* ── Done stat ── */
     .done-stat {
@@ -985,6 +1030,13 @@
 </div>
 <div class="tab-content" id="tab-done">
   <div id="done-stat"></div>
+  <div style="padding:0 2px 10px">
+    <div class="segment-group" id="done-filter-group">
+      <button class="seg-btn active" onclick="setDoneFilter('all', this)">All</button>
+      <button class="seg-btn" onclick="setDoneFilter('personal', this)">Personal</button>
+      <button class="seg-btn" onclick="setDoneFilter('work', this)">Work</button>
+    </div>
+  </div>
   <div id="list-done"></div>
   <div class="clear-tab-bar"><button class="btn-clear-tab" onclick="clearDone()">Clean Slate</button></div>
 </div>
@@ -1164,6 +1216,7 @@ const PRIORITY_ORDER  = { must: 0, should: 1, could: 2 };
 const PRIORITY_WEIGHT = { must: 2, should: 1, could: 0.5 };
 const todayFilter     = { personal: false, work: false, combined: false };
 let focusModeOn  = false;
+let doneFilter   = 'all';
 let addToCalFlag = false;
 let lastCat     = 'personal';
 let lastPriority = 'must';
@@ -1773,27 +1826,95 @@ function renderLoadIndicator() {
   // Below threshold: stays hidden (display:none)
 }
 
+function setDoneFilter(val, btn) {
+  doneFilter = val;
+  document.querySelectorAll('#done-filter-group .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDone();
+}
+
 function renderDone() {
   const statEl = document.getElementById('done-stat');
-  const done   = tasks
-    .filter(t => t.completed)
-    .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+  const listEl = document.getElementById('list-done');
+  const now    = new Date();
 
-  const now        = new Date();
-  const monthCount = tasks.filter(t => {
-    if (!t.completed || !t.completed_at) return false;
+  const allDone = tasks.filter(t => t.completed);
+
+  // Stat counts (always across all categories)
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const weekStart  = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const todayCount = allDone.filter(t => t.completed_at && new Date(t.completed_at) >= todayStart).length;
+  const weekCount  = allDone.filter(t => t.completed_at && new Date(t.completed_at) >= weekStart).length;
+  const monthCount = allDone.filter(t => {
+    if (!t.completed_at) return false;
     const d = new Date(t.completed_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
-  const monthName = now.toLocaleDateString('en-SG', { month: 'long' });
+  const monthName = now.toLocaleDateString('en-SG', { month: 'short' });
 
   if (statEl) {
-    statEl.innerHTML = monthCount > 0
-      ? `<div class="done-stat"><span class="done-stat-num">${monthCount}</span><span class="done-stat-label">completed in ${monthName}</span></div>`
-      : `<div class="done-stat"><span class="done-stat-label">No completions in ${monthName} yet</span></div>`;
+    statEl.innerHTML = `
+      <div class="done-stats-row">
+        <div class="done-stat-block">
+          <span class="done-stat-block-num">${todayCount}</span>
+          <span class="done-stat-block-lbl">Today</span>
+        </div>
+        <div class="done-stat-block">
+          <span class="done-stat-block-num">${weekCount}</span>
+          <span class="done-stat-block-lbl">Week</span>
+        </div>
+        <div class="done-stat-block">
+          <span class="done-stat-block-num">${monthCount}</span>
+          <span class="done-stat-block-lbl">${monthName}</span>
+        </div>
+      </div>`;
   }
 
-  renderList('list-done', done, 'Nothing completed yet', true);
+  // Filter by category
+  const filtered = doneFilter === 'all'
+    ? allDone
+    : allDone.filter(t => t.category === doneFilter);
+
+  const sorted = filtered.slice().sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+
+  listEl.innerHTML = '';
+  if (!sorted.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>Nothing completed yet</p></div>';
+    return;
+  }
+
+  // Group by local completion date
+  const groups = {};
+  sorted.forEach(t => {
+    const d = t.completed_at ? new Date(t.completed_at) : new Date();
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(dateKey => {
+    const d    = new Date(dateKey + 'T00:00:00');
+    const diff = Math.round((today0 - d) / 86400000);
+    let label;
+    if (diff === 0)      label = 'Today';
+    else if (diff === 1) label = 'Yesterday';
+    else                 label = d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const count  = groups[dateKey].length;
+    const header = document.createElement('div');
+    header.className = 'section-label';
+    header.textContent = `${label} · ${count} task${count !== 1 ? 's' : ''}`;
+    listEl.appendChild(header);
+
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+    groups[dateKey].forEach(t => taskList.appendChild(buildCard(t, doneFilter === 'all', false)));
+    listEl.appendChild(taskList);
+  });
 }
 
 function isTodayDate(dateStr) {
@@ -2220,8 +2341,66 @@ async function submitSubtask(taskId, input) {
 }
 
 // ── RADAR MODAL ───────────────────────────────────────────────────────────────
+function buildRadarModalItem(t, showOverdueBadge) {
+  const overdue  = isOverdue(t.due_date);
+  const dueLabel = showOverdueBadge && overdue
+    ? `${overdueDays(t.due_date)}d overdue`
+    : (t.due_time ? formatTime(t.due_time) : '');
+
+  const subs     = subtasks.filter(s => s.task_id === t.id);
+  const subTotal = subs.length;
+  const subDone  = subs.filter(s => s.completed).length;
+
+  const item = document.createElement('div');
+  item.className = 'radar-modal-item';
+
+  // Top row
+  const row = document.createElement('div');
+  row.className = 'radar-modal-item-row';
+  row.innerHTML = `
+    <span class="priority-dot ${t.priority}"></span>
+    <span class="radar-modal-title">${esc(t.title)}</span>
+    <span class="radar-modal-cat">${t.category}</span>
+    ${dueLabel ? `<span class="radar-modal-due${overdue ? ' overdue' : ''}">${dueLabel}</span>` : ''}
+    <span class="radar-modal-chevron">▾</span>`;
+
+  // Detail section
+  const detail = document.createElement('div');
+  detail.className = 'radar-modal-detail';
+
+  let detailHtml = '';
+  if (t.notes) {
+    detailHtml += `<div class="radar-modal-notes">${esc(t.notes)}</div>`;
+  }
+  if (subTotal > 0) {
+    detailHtml += `<div class="radar-modal-subs">${subDone}/${subTotal} subtask${subTotal !== 1 ? 's' : ''} done</div>`;
+  }
+  if (t.estimated_minutes) {
+    detailHtml += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Est. ${t.estimated_minutes} min</div>`;
+  }
+  detailHtml += `<div class="radar-modal-actions">
+    <button class="btn-done"   onclick="event.stopPropagation();toggleTask('${t.id}');closeRadarModal()">Done</button>
+    <button class="btn-edit"   onclick="event.stopPropagation();closeRadarModal();openEditModal('${t.id}')">Edit</button>
+    <button class="btn-extend" onclick="event.stopPropagation();closeRadarModal();openExtendModal('${t.id}')">Extend</button>
+    <button class="btn-delete" onclick="event.stopPropagation();if(confirm('Delete this task?')){deleteTask('${t.id}');closeRadarModal()}">Delete</button>
+  </div>`;
+  detail.innerHTML = detailHtml;
+
+  let expanded = false;
+  const chevron = row.querySelector('.radar-modal-chevron');
+  item.addEventListener('click', () => {
+    expanded = !expanded;
+    detail.classList.toggle('open', expanded);
+    if (chevron) chevron.style.transform = expanded ? 'rotate(180deg)' : '';
+  });
+
+  item.appendChild(row);
+  item.appendChild(detail);
+  return item;
+}
+
 function openRadarModal(dayName, dateFmt, dateStr, isToday) {
-  const active      = tasks.filter(t => !t.completed);
+  const active       = tasks.filter(t => !t.completed);
   const overdueTasks = active.filter(t => isOverdue(t.due_date));
   const dayTasks     = active.filter(t => t.due_date === dateStr);
 
@@ -2247,20 +2426,7 @@ function openRadarModal(dayName, dateFmt, dateStr, isToday) {
       header.className = 'radar-modal-group-label';
       header.textContent = labels[p];
       body.appendChild(header);
-      groups[p].forEach(t => {
-        const overdue = isOverdue(t.due_date);
-        const dueLabel = showOverdueBadge && overdue
-          ? `${overdueDays(t.due_date)}d overdue`
-          : (t.due_time ? formatTime(t.due_time) : '');
-        const item = document.createElement('div');
-        item.className = 'radar-modal-item';
-        item.innerHTML = `
-          <span class="priority-dot ${p}"></span>
-          <span class="radar-modal-title">${esc(t.title)}</span>
-          <span class="radar-modal-cat">${t.category}</span>
-          ${dueLabel ? `<span class="radar-modal-due${overdue ? ' overdue' : ''}">${dueLabel}</span>` : ''}`;
-        body.appendChild(item);
-      });
+      groups[p].forEach(t => body.appendChild(buildRadarModalItem(t, showOverdueBadge)));
     });
   }
 
