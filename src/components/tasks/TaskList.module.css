@@ -1,0 +1,22 @@
+.root { display: flex; flex-direction: column; }
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #6b7280;
+  margin: 16px 0 8px;
+}
+.sectionLabel:first-child { margin-top: 4px; }
+.sectionLabel.past { color: #ef4444; }
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+.empty {
+  text-align: center;
+  padding: 56px 20px;
+  color: #6b7280;
+}
+.emptyIcon { font-size: 28px; margin-bottom: 10px; }
+.empty p { font-size: 14px; }

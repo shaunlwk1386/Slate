@@ -1,0 +1,192 @@
+.page {
+  padding: 0 16px;
+}
+
+.header {
+  padding: 24px 20px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.headerTitle {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #1e293b;
+}
+.headerDate {
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 10px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Today toggle / focus toggle */
+.todayBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2px 10px;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: white;
+  border: none;
+  border-radius: 100px;
+  padding: 6px 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+.toggle.on {
+  background: #1e293b;
+  color: white;
+}
+.toggleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  transition: background 0.15s;
+}
+.toggle.on .toggleDot { background: #86efac; }
+
+/* Combined controls bar */
+.combinedControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px 10px;
+  gap: 8px;
+}
+.controlGroup { display: flex; gap: 6px; }
+
+/* Load indicator */
+.loadIndicator {
+  background: white;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  font-size: 12px;
+  font-weight: 600;
+}
+.loadIndicator.busy { color: #f59e0b; }
+.loadIndicator.heavy { color: #ef4444; }
+
+/* Recommended Now */
+.recSection {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.recHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.recHeaderTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #1e293b;
+}
+.recChevron { font-size: 10px; color: #94a3b8; transition: transform 0.2s; }
+.recChevron.open { transform: rotate(180deg); }
+.recBody { display: none; padding: 0 14px 14px; }
+.recBody.open { display: block; }
+.recControls { display: flex; gap: 8px; margin-bottom: 12px; }
+.recControl { flex: 1; }
+.recControlLabel { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 5px; }
+.recSelect {
+  width: 100%; background: #eef0f4; border: none; border-radius: 8px;
+  padding: 7px 10px; font-size: 12px; font-family: inherit;
+  color: #111111; outline: none; cursor: pointer;
+}
+.recOutput { display: flex; flex-direction: column; gap: 7px; }
+.recItem {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 11px; background: #eef0f4; border-radius: 9px;
+}
+.recItem.primary { background: #f1f5f9; border-left: 3px solid #1e293b; }
+.recRank { font-family: var(--font-dm-mono), monospace; font-size: 11px; font-weight: 700; color: #94a3b8; flex-shrink: 0; padding-top: 1px; }
+.recItem.primary .recRank { color: #1e293b; }
+.recInfo { flex: 1; min-width: 0; }
+.recTitle { font-size: 13px; font-weight: 500; color: #111111; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recReason { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.recEmpty { font-size: 13px; color: #94a3b8; padding: 4px 0; }
+.focusHidden { font-size: 11px; color: #94a3b8; padding: 10px 2px; text-align: center; }
+
+/* Clear button */
+.clearBar { display: flex; justify-content: center; padding: 18px 0 4px; }
+.btnClear {
+  background: none; border: none;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  color: #94a3b8; cursor: pointer; padding: 4px 10px;
+  border-radius: 6px; transition: color 0.15s;
+}
+.btnClear:hover { color: #ef4444; }
+
+/* Done tab */
+.doneStatsRow { display: flex; gap: 0; padding: 14px 2px 4px; }
+.doneStatBlock {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; padding: 0 4px;
+  border-right: 1px solid #e2e8f0;
+}
+.doneStatBlock:last-child { border-right: none; }
+.doneStatNum {
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 28px; font-weight: 500;
+  color: #22c55e; line-height: 1;
+}
+.doneStatLbl { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+
+.doneFilterBar { padding: 0 2px 10px; }
+.segGroup {
+  display: flex; background: #eef0f4;
+  border-radius: 10px; padding: 3px; gap: 2px;
+}
+.seg {
+  flex: 1; padding: 6px 0; border: none; border-radius: 8px;
+  background: transparent; font-family: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer; color: #6b7280; transition: all 0.15s;
+}
+.seg.active { background: white; color: #1e293b; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+/* Radar tab */
+.radarList { display: flex; flex-direction: column; gap: 8px; }
+.radarDay {
+  background: white; border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  border: 2px solid #d1d5db;
+  cursor: pointer;
+}
+.radarDay.loadLight  { border-color: #22c55e; }
+.radarDay.loadBusy   { border-color: #f59e0b; }
+.radarDay.loadHeavy  { border-color: #ef4444; }
+.radarDayLabel { flex: 1; min-width: 0; }
+.radarDayName { font-size: 14px; font-weight: 600; color: #1e293b; }
+.radarDayDate { font-family: var(--font-dm-mono), monospace; font-size: 10px; color: #6b7280; margin-top: 2px; }
+.radarCounts { display: flex; align-items: center; gap: 14px; }
+.radarCount { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.radarCountNum { font-family: var(--font-dm-mono), monospace; font-size: 16px; font-weight: 500; line-height: 1; color: #94a3b8; }
+.radarCountNum.must   { color: #ef4444; }
+.radarCountNum.should { color: #f59e0b; }
+.radarCountNum.could  { color: #94a3b8; }
+.radarCountLbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #94a3b8; }

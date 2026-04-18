@@ -1,0 +1,37 @@
+.nav {
+  position: fixed;
+  bottom: 10px;
+  left: 12px;
+  right: 12px;
+  border-radius: 20px;
+  background: #1a202c;
+  display: flex;
+  z-index: 200;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.navItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 4px;
+  color: #4b5563;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-decoration: none;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.navItem .icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.navItem.active {
+  color: #ffffff;
+}
