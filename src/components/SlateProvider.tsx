@@ -7,6 +7,7 @@ import ExtendModal from '@/components/tasks/ExtendModal';
 import RadarModal from '@/components/tasks/RadarModal';
 import Toast from '@/components/ui/Toast';
 import FAB from '@/components/ui/FAB';
+import Refresh from '@/components/ui/Refresh';
 
 export default function SlateProvider({ children }: { children: React.ReactNode }) {
   useInitData();
@@ -15,6 +16,7 @@ export default function SlateProvider({ children }: { children: React.ReactNode 
   return (
     <>
       {children}
+      <Refresh />
       <FAB />
       <TaskModal />
       <ExtendModal />

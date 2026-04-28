@@ -49,6 +49,10 @@ interface SlateState {
   undoToast: { msg: string; visible: boolean };
   undoTimer: ReturnType<typeof setTimeout> | null;
 
+  // Expanded cards (not persisted) — survives TaskCard remounts
+  openCardIds: Record<string, true>;
+  toggleCardOpen: (id: string) => void;
+
   // Undo buffer (not persisted)
   clearedTasks: SlateTask[];
   clearedSubtasks: SlateSubtask[];
@@ -116,6 +120,15 @@ export const useSlateStore = create<SlateState>()(
       undoTimer: null,
       clearedTasks: [],
       clearedSubtasks: [],
+      openCardIds: {},
+
+      toggleCardOpen: (id) =>
+        set(s => {
+          const next = { ...s.openCardIds };
+          if (next[id]) delete next[id];
+          else next[id] = true;
+          return { openCardIds: next };
+        }),
 
       // ── Data ───────────────────────────────────────────────────────────────
 

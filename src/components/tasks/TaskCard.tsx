@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
 import type { SlateTask, SlateSubtask } from '@/lib/slate/types';
 import {
   formatDue, formatTime, isOverdue, overdueDays,
@@ -12,12 +12,13 @@ import styles from './TaskCard.module.css';
 interface Props {
   task: SlateTask;
   subtasks: SlateSubtask[];
-  showBadge?: boolean;
   isOverdueCard?: boolean;
+  inGroup?: boolean;
 }
 
-export default function TaskCard({ task, subtasks, showBadge = false, isOverdueCard = false }: Props) {
-  const [open, setOpen] = useState(false);
+export default function TaskCard({ task, subtasks, isOverdueCard = false, inGroup = false }: Props) {
+  const open = useSlateStore(s => !!s.openCardIds[task.id]);
+  const toggleCardOpen = useSlateStore(s => s.toggleCardOpen);
   const addSubtaskRef = useRef<HTMLInputElement>(null);
 
   const toggleTask = useSlateStore(s => s.toggleTask);
@@ -46,6 +47,7 @@ export default function TaskCard({ task, subtasks, showBadge = false, isOverdueC
 
   const cardClass = [
     styles.card,
+    inGroup ? styles.grouped : styles[task.priority],
     isOverdueCard ? styles.overdueCard : '',
     isOverdueCard && state !== 'overdue' ? styles[state] : '',
   ].filter(Boolean).join(' ');
@@ -75,7 +77,7 @@ export default function TaskCard({ task, subtasks, showBadge = false, isOverdueC
   return (
     <div className={cardClass} data-id={task.id}>
       {/* ── Main row ── */}
-      <div className={styles.main} onClick={() => setOpen(o => !o)}>
+      <div className={styles.main} onClick={() => toggleCardOpen(task.id)}>
         <div
           className={`${styles.checkbox} ${isDone ? styles.checked : ''}`}
           onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
@@ -83,8 +85,6 @@ export default function TaskCard({ task, subtasks, showBadge = false, isOverdueC
         <div className={styles.body}>
           <div className={`${styles.title} ${isDone ? styles.done : ''}`}>{task.title}</div>
           <div className={styles.meta}>
-            <span className={`${styles.priorityDot} ${styles[task.priority]}`} />
-            {showBadge && <span className={styles.catBadge}>{task.category}</span>}
             {dueLabel && (
               <span className={`${styles.due} ${overdue ? styles.overdue : ''}`}>{dueLabel}</span>
             )}
