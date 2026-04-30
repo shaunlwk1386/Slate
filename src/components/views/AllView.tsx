@@ -32,6 +32,12 @@ export default function AllView() {
 
   return (
     <div className={styles.page}>
+      {/* Brand */}
+      <div className={styles.brand}>
+        <span className={styles.brandTitle}>Slate</span>
+        <span className={styles.brandTag}>by egg</span>
+      </div>
+
       {/* Controls */}
       <div className={styles.combinedControls}>
         <div className={styles.controlGroup}>

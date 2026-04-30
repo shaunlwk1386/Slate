@@ -22,6 +22,27 @@
   letter-spacing: 0.5px;
 }
 
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px 2px 14px;
+}
+.brandTitle {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #1e293b;
+  line-height: 1;
+}
+.brandTag {
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
 /* Today toggle / focus toggle */
 .todayBar {
   display: flex;
