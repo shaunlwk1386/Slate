@@ -1,17 +1,38 @@
 .root { display: flex; flex-direction: column; }
 
 .sectionLabel {
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: #6b7280;
-  margin: 16px 0 8px;
+  margin: 18px 0 10px;
 }
-.sectionLabel:first-child { margin-top: 4px; }
+.root > div:first-child .sectionLabel { margin-top: 4px; }
 .sectionLabel.past { color: #ef4444; }
 
+.catLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #94a3b8;
+  margin: 16px 0 6px;
+  padding-left: 2px;
+}
+
 .list { display: flex; flex-direction: column; gap: 8px; }
+
+.groups { display: flex; flex-direction: column; gap: 8px; }
+
+.priorityGroup {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1.5px solid transparent;
+}
+.priorityGroup.must   { border-color: #ef4444; }
+.priorityGroup.should { border-color: #f59e0b; }
+.priorityGroup.could  { border-color: #e2e8f0; }
 
 .empty {
   text-align: center;

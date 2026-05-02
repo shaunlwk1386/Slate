@@ -3,6 +3,20 @@
   border-radius: 14px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
   overflow: hidden;
+  border: 1.5px solid transparent;
+}
+
+.card.must   { border-color: #ef4444; }
+.card.should { border-color: #f59e0b; }
+.card.could  { border-color: #e2e8f0; }
+
+.card.grouped {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+.card.grouped:not(:last-child) {
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .card.overdueCard { border-left: 3px solid #ef4444; }
@@ -65,15 +79,6 @@
   flex-wrap: wrap;
 }
 
-.priorityDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.priorityDot.must { background: #ef4444; }
-.priorityDot.should { background: #f59e0b; }
-.priorityDot.could { background: #94a3b8; }
 
 .priorityLabel {
   font-size: 10px;

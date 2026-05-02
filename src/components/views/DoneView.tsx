@@ -112,7 +112,6 @@ export default function DoneView() {
                       key={t.id}
                       task={t}
                       subtasks={subtasks.filter(s => s.task_id === t.id)}
-                      showBadge={doneFilter === 'all'}
                     />
                   ))}
                 </div>

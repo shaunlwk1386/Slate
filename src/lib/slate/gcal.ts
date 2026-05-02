@@ -28,6 +28,10 @@ function requestToken(): Promise<string> {
         gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
         resolve(gcalToken!);
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error_callback: (err: any) => {
+        reject(new Error(err?.type || 'auth_error'));
+      },
     });
     client.requestAccessToken();
   });

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import styles from './Nav.module.css';
 
 const TABS = [
-  { href: '/',       icon: '◯', label: 'Personal' },
+  { href: '/personal', icon: '◯', label: 'Personal' },
   { href: '/work',   icon: '⊡', label: 'Work'     },
   { href: '/all',    icon: '◎', label: 'All'      },
   { href: '/radar',  icon: '⬡', label: 'Radar'    },
@@ -18,7 +18,7 @@ export default function Nav() {
   return (
     <nav className={styles.nav}>
       {TABS.map(({ href, icon, label }) => {
-        const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+        const active = pathname === href || (href !== '/personal' && pathname.startsWith(href));
         return (
           <Link
             key={href}

@@ -1,5 +1,5 @@
-import AllView from '@/components/views/AllView';
+import { redirect } from 'next/navigation';
 
-export default function AllPage() {
-  return <AllView />;
+export default function RootPage() {
+  redirect('/all');
 }
