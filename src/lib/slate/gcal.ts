@@ -23,16 +23,19 @@ function requestToken(): Promise<string> {
       scope: GCAL_SCOPE,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       callback: (resp: any) => {
-        if (resp.error) { reject(new Error(resp.error)); return; }
+        console.log('[gcal] callback fired', resp);
+        if (resp.error) { console.error('[gcal] callback error', resp.error); reject(new Error(resp.error)); return; }
         gcalToken = resp.access_token as string;
         gcalTokenExpiry = Date.now() + 55 * 60 * 1000;
         resolve(gcalToken!);
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       error_callback: (err: any) => {
+        console.error('[gcal] error_callback fired', err);
         reject(new Error(err?.type || 'auth_error'));
       },
     });
+    console.log('[gcal] requestAccessToken called');
     client.requestAccessToken();
   });
 }
