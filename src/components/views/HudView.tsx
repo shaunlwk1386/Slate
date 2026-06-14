@@ -40,6 +40,7 @@ export default function HudView() {
         tasks={base}
         subtasks={subtasks}
         showBadge
+        wrapTitle
         emptyMsg={todayFilter.combined ? 'Nothing due today' : 'All clear'}
       />
     </div>

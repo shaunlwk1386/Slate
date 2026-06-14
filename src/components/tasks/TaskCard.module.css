@@ -70,6 +70,7 @@
   white-space: nowrap;
 }
 .title.done { color: #6b7280; }
+.title.wrap { white-space: normal; overflow: visible; text-overflow: unset; }
 
 .meta {
   display: flex;

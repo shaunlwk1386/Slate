@@ -14,9 +14,10 @@ interface Props {
   subtasks: SlateSubtask[];
   isOverdueCard?: boolean;
   inGroup?: boolean;
+  wrapTitle?: boolean;
 }
 
-export default function TaskCard({ task, subtasks, isOverdueCard = false, inGroup = false }: Props) {
+export default function TaskCard({ task, subtasks, isOverdueCard = false, inGroup = false, wrapTitle = false }: Props) {
   const open = useSlateStore(s => !!s.openCardIds[task.id]);
   const toggleCardOpen = useSlateStore(s => s.toggleCardOpen);
   const addSubtaskRef = useRef<HTMLInputElement>(null);
@@ -103,7 +104,7 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
           onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
         />
         <div className={styles.body}>
-          <div className={`${styles.title} ${isDone ? styles.done : ''}`}>{task.title}</div>
+          <div className={`${styles.title} ${isDone ? styles.done : ''} ${wrapTitle ? styles.wrap : ''}`}>{task.title}</div>
           <div className={styles.meta}>
             {dueLabel && (
               <span className={`${styles.due} ${overdue ? styles.overdue : ''}`}>{dueLabel}</span>

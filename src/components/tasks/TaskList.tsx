@@ -11,9 +11,10 @@ interface Props {
   subtasks: SlateSubtask[];
   showBadge?: boolean;
   emptyMsg?: string;
+  wrapTitle?: boolean;
 }
 
-export default function TaskList({ tasks, subtasks, showBadge = false, emptyMsg = 'All clear' }: Props) {
+export default function TaskList({ tasks, subtasks, showBadge = false, emptyMsg = 'All clear', wrapTitle = false }: Props) {
   if (!tasks.length) {
     return (
       <div className={styles.empty}>
@@ -65,6 +66,7 @@ export default function TaskList({ tasks, subtasks, showBadge = false, emptyMsg 
             subtasks={subtasks.filter(s => s.task_id === t.id)}
             isOverdueCard={isOverdueGroup && isOverdue(t.due_date)}
             inGroup
+            wrapTitle={wrapTitle}
           />
         ))}
       </div>
