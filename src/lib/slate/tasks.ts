@@ -49,6 +49,10 @@ export async function patchSubtask(id: string, completed: boolean): Promise<void
   await supabase.from('slate_subtasks').update({ completed }).eq('id', id);
 }
 
+export async function patchSubtaskTitle(id: string, title: string): Promise<void> {
+  await supabase.from('slate_subtasks').update({ title }).eq('id', id);
+}
+
 export async function restoreTasks(
   tasks: Array<Omit<SlateTask, 'id' | 'created_at'>>
 ): Promise<SlateTask[]> {

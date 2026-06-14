@@ -24,7 +24,8 @@
   letter-spacing: 0.2px;
   text-decoration: none;
   transition: color 0.15s;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .navItem .icon {
@@ -35,3 +36,34 @@
 .navItem.active {
   color: #ffffff;
 }
+
+/* Icon-only nav items used in /hud window */
+.hudItem {
+  flex-direction: row;
+  padding: 14px 0;
+  gap: 0;
+  font-size: 0;
+}
+
+.hudItem .icon {
+  font-size: 18px;
+}
+
+/* HUD launcher button in regular nav */
+.hudLauncher {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: #4b5563;
+  font-size: 15px;
+  cursor: pointer;
+  transition: color 0.15s;
+  line-height: 1;
+}
+
+.hudLauncher:hover { color: #ffffff; }

@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useInitData } from '@/hooks/useInitData';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import TaskModal from '@/components/tasks/TaskModal';
@@ -12,12 +13,14 @@ import Refresh from '@/components/ui/Refresh';
 export default function SlateProvider({ children }: { children: React.ReactNode }) {
   useInitData();
   useRealtimeSync();
+  const pathname = usePathname();
+  const isOnboardPage = pathname === '/radar';
 
   return (
     <>
       {children}
       <Refresh />
-      <FAB />
+      {!isOnboardPage && <FAB />}
       <TaskModal />
       <ExtendModal />
       <RadarModal />

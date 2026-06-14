@@ -33,7 +33,11 @@ function parseTextDate(val: string): string | null {
 }
 
 export default function TaskModal() {
-  const { taskModal, tasks, lastCat, lastPriority, closeTaskModal, addTask, updateTask, addToCalendar, setLastCat, setLastPriority } = useSlateStore();
+  const {
+    taskModal, tasks, lastCat, lastPriority,
+    closeTaskModal, addTask, updateTask, addToCalendar, addSubtask,
+    setLastCat, setLastPriority,
+  } = useSlateStore();
   const { open, editingId } = taskModal;
   const isEdit = !!editingId;
   const task = editingId ? tasks.find(t => t.id === editingId) : null;
@@ -49,10 +53,12 @@ export default function TaskModal() {
   const [context, setContext] = useState<ContextType>('');
   const [notes, setNotes] = useState('');
   const [addToCal, setAddToCal] = useState(false);
+  const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState('');
 
   const titleRef = useRef<HTMLInputElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
 
-  // Populate form when modal opens
   useEffect(() => {
     if (!open) return;
     if (task) {
@@ -68,17 +74,22 @@ export default function TaskModal() {
       setNotes(task.notes || '');
       setAddToCal(false);
     } else {
+      const now = new Date();
+      const isoDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       setTitle('');
       setCat(lastCat);
       setPriority(lastPriority);
-      setDuePicker('');
-      setDueText('');
-      setTimePicker('');
-      setTimeText('');
+      setDuePicker(isoDate);
+      setDueText(formatDateForText(isoDate));
+      setTimePicker(timeStr);
+      setTimeText(timeStr);
       setEstimate('');
       setContext('');
       setNotes('');
       setAddToCal(false);
+      setPendingSubtasks([]);
+      setSubtaskInput('');
     }
     setTimeout(() => titleRef.current?.focus(), 120);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +114,14 @@ export default function TaskModal() {
         setTimePicker(`${hh}:${mm}`);
       }
     }
+  }
+
+  function handleAddSubtask() {
+    const val = subtaskInput.trim();
+    if (!val) return;
+    setPendingSubtasks(p => [...p, val]);
+    setSubtaskInput('');
+    subtaskInputRef.current?.focus();
   }
 
   async function handleSubmit() {
@@ -130,7 +149,12 @@ export default function TaskModal() {
       await updateTask(editingId, data);
     } else {
       const newTask = await addTask(data);
-      if (addToCal && newTask) addToCalendar(newTask.id);
+      if (newTask) {
+        for (const sub of pendingSubtasks) {
+          await addSubtask(newTask.id, sub);
+        }
+        if (addToCal) addToCalendar(newTask.id);
+      }
     }
   }
 
@@ -267,6 +291,38 @@ export default function TaskModal() {
             placeholder="Any context…"
           />
         </div>
+
+        {/* Subtasks (add mode only) */}
+        {!isEdit && (
+          <div className={styles.group}>
+            <label className={styles.label}>Subtasks</label>
+            <div className={styles.subtaskAddRow}>
+              <input
+                ref={subtaskInputRef}
+                className={styles.subtaskInput}
+                value={subtaskInput}
+                onChange={e => setSubtaskInput(e.target.value)}
+                placeholder="Add a subtask…"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
+              />
+              <button className={styles.subtaskAddBtn} onClick={handleAddSubtask}>+</button>
+            </div>
+            {pendingSubtasks.length > 0 && (
+              <div className={styles.subtaskList}>
+                {pendingSubtasks.map((sub, i) => (
+                  <div key={i} className={styles.subtaskItem}>
+                    <span className={styles.subtaskBullet}>—</span>
+                    <span className={styles.subtaskItemTitle}>{sub}</span>
+                    <button
+                      className={styles.subtaskRemove}
+                      onClick={() => setPendingSubtasks(p => p.filter((_, j) => j !== i))}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Add to calendar toggle (add mode only) */}
         {!isEdit && (

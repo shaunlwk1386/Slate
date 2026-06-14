@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { SlateTask, SlateSubtask } from '@/lib/slate/types';
 import {
   formatDue, formatTime, isOverdue, overdueDays,
@@ -30,6 +30,10 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
   const addToCal = useSlateStore(s => s.addToCalendar);
   const removeFromCal = useSlateStore(s => s.removeFromCalendar);
   const updateTask = useSlateStore(s => s.updateTask);
+  const renameSubtask = useSlateStore(s => s.renameSubtask);
+
+  const [editSubId, setEditSubId] = useState<string | null>(null);
+  const [editSubValue, setEditSubValue] = useState('');
 
   const isDone = task.completed;
   const overdue = !isDone && isOverdue(task.due_date);
@@ -67,6 +71,22 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
     if (confirm('Delete this task?')) deleteTask(task.id);
   }
 
+
+  function startEditSub(id: string, title: string) {
+    setEditSubId(id);
+    setEditSubValue(title);
+  }
+
+  async function commitEditSub() {
+    if (!editSubId) return;
+    await renameSubtask(editSubId, editSubValue);
+    setEditSubId(null);
+  }
+
+  function cancelEditSub() {
+    setEditSubId(null);
+    setEditSubValue('');
+  }
 
   const completedDate = task.completed_at
     ? new Date(task.completed_at).toLocaleDateString('en-SG', {
@@ -151,9 +171,27 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
                   className={`${styles.subtaskCheck} ${sub.completed ? styles.checked : ''}`}
                   onClick={() => toggleSubtask(sub.id)}
                 />
-                <span className={`${styles.subtaskTitle} ${sub.completed ? styles.done : ''}`}>
-                  {sub.title}
-                </span>
+                {!isDone && editSubId === sub.id ? (
+                  <input
+                    className={styles.subtaskEditInput}
+                    value={editSubValue}
+                    autoFocus
+                    onChange={e => setEditSubValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); commitEditSub(); }
+                      if (e.key === 'Escape') cancelEditSub();
+                    }}
+                    onBlur={commitEditSub}
+                  />
+                ) : (
+                  <span
+                    className={`${styles.subtaskTitle} ${sub.completed ? styles.done : ''}`}
+                    onClick={!isDone ? () => startEditSub(sub.id, sub.title) : undefined}
+                    style={!isDone ? { cursor: 'text' } : undefined}
+                  >
+                    {sub.title}
+                  </span>
+                )}
               </div>
             ))}
           </div>

@@ -11,6 +11,7 @@ import {
   removeTasks,
   insertSubtask,
   patchSubtask,
+  patchSubtaskTitle,
   restoreTasks,
   restoreSubtasks,
 } from '@/lib/slate/tasks';
@@ -34,7 +35,6 @@ interface SlateState {
 
   // Filters / UI toggles (persisted)
   todayFilter: Record<'personal' | 'work' | 'combined', boolean>;
-  focusModeOn: boolean;
   doneFilter: DoneFilter;
   lastCat: Category;
   lastPriority: Priority;
@@ -68,6 +68,7 @@ interface SlateState {
   toggleTask: (id: string) => Promise<void>;
   addSubtask: (taskId: string, title: string) => Promise<void>;
   toggleSubtask: (id: string) => Promise<void>;
+  renameSubtask: (id: string, title: string) => Promise<void>;
 
   clearTab: (scope: 'personal' | 'work' | 'all') => Promise<void>;
   clearDone: () => Promise<void>;
@@ -89,7 +90,6 @@ interface SlateState {
 
   // ── Filter actions ────────────────────────────────────────────────────────
   toggleTodayFilter: (tab: 'personal' | 'work' | 'combined') => void;
-  toggleFocusMode: () => void;
   setDoneFilter: (val: DoneFilter) => void;
   setLastCat: (cat: Category) => void;
   setLastPriority: (priority: Priority) => void;
@@ -108,7 +108,6 @@ export const useSlateStore = create<SlateState>()(
       tasks: [],
       subtasks: [],
       todayFilter: { personal: false, work: false, combined: false },
-      focusModeOn: false,
       doneFilter: 'all',
       lastCat: 'personal',
       lastPriority: 'must',
@@ -206,6 +205,17 @@ export const useSlateStore = create<SlateState>()(
         set(s => ({ subtasks: s.subtasks.map(sub => sub.id === id ? { ...sub, completed } : sub) }));
       },
 
+      renameSubtask: async (id, title) => {
+        const trimmed = title.trim();
+        if (!trimmed) return;
+        set(s => ({ subtasks: s.subtasks.map(sub => sub.id === id ? { ...sub, title: trimmed } : sub) }));
+        try {
+          await patchSubtaskTitle(id, trimmed);
+        } catch {
+          get().showToast('Error updating subtask');
+        }
+      },
+
       clearTab: async (scope) => {
         const active = get().tasks.filter(t => !t.completed);
         const toDelete = scope === 'all' ? active : active.filter(t => t.category === scope);
@@ -277,9 +287,17 @@ export const useSlateStore = create<SlateState>()(
             get().showToast('Added to Google Calendar');
           }
         } catch (err) {
-          if (err instanceof Error && err.message === 'token_expired') {
-            // Token expired mid-request — retry once after re-auth (re-auth happens in gcal.ts)
+          if (!(err instanceof Error)) { get().showToast('Calendar error'); return; }
+          if (err.message === 'token_expired') {
             get().showToast('Calendar auth expired — try again');
+          } else if (err.message === 'popup_blocked') {
+            get().showToast('Allow pop-ups for Google Calendar');
+          } else if (err.message === 'popup_closed') {
+            // user closed the auth popup — no toast needed
+          } else if (err.message === 'access_denied') {
+            get().showToast('Calendar access denied');
+          } else if (err.message === 'Google Identity Services not loaded') {
+            get().showToast('Google sign-in not ready — try again');
           } else {
             get().showToast('Calendar error');
           }
@@ -340,8 +358,6 @@ export const useSlateStore = create<SlateState>()(
       toggleTodayFilter: (tab) =>
         set(s => ({ todayFilter: { ...s.todayFilter, [tab]: !s.todayFilter[tab] } })),
 
-      toggleFocusMode: () => set(s => ({ focusModeOn: !s.focusModeOn })),
-
       setDoneFilter: (val) => set({ doneFilter: val }),
 
       setLastCat: (cat) => set({ lastCat: cat }),
@@ -374,7 +390,6 @@ export const useSlateStore = create<SlateState>()(
       name: 'slate-v2-state',
       partialize: (s) => ({
         todayFilter: s.todayFilter,
-        focusModeOn: s.focusModeOn,
         doneFilter: s.doneFilter,
         lastCat: s.lastCat,
         lastPriority: s.lastPriority,

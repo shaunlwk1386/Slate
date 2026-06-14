@@ -32,7 +32,11 @@ function requestToken(): Promise<string> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       error_callback: (err: any) => {
         console.error('[gcal] error_callback fired', err);
-        reject(new Error(err?.type || 'auth_error'));
+        const type = err?.type as string | undefined;
+        if (type === 'popup_closed_by_user') { reject(new Error('popup_closed')); return; }
+        if (type === 'popup_failed_to_open') { reject(new Error('popup_blocked')); return; }
+        if (type === 'access_denied') { reject(new Error('access_denied')); return; }
+        reject(new Error(type || 'auth_error'));
       },
     });
     console.log('[gcal] requestAccessToken called');

@@ -1,5 +1,5 @@
-import RadarView from '@/components/views/RadarView';
+import OnboardingView from '@/components/views/OnboardingView';
 
 export default function RadarPage() {
-  return <RadarView />;
+  return <OnboardingView />;
 }

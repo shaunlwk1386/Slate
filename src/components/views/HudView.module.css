@@ -1,0 +1,55 @@
+.page {
+  padding: 0 12px;
+}
+
+.controls {
+  display: flex;
+  gap: 6px;
+  padding: 10px 0 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: none;
+  border-radius: 100px;
+  padding: 5px 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.toggle.on {
+  background: #1e293b;
+  color: white;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.toggle.on .dot { background: #86efac; }
+
+.loadBanner {
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.loadBanner.busy  { color: #f59e0b; }
+.loadBanner.heavy { color: #ef4444; }

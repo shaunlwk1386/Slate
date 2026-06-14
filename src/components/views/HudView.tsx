@@ -4,13 +4,12 @@ import { useSlateStore } from '@/store/useSlateStore';
 import TaskList from '@/components/tasks/TaskList';
 import { isTodayDate } from '@/lib/slate/dateUtils';
 import { PRIORITY_WEIGHT } from '@/lib/slate/scoring';
-import styles from './views.module.css';
+import styles from './HudView.module.css';
 
-export default function AllView() {
-  const { tasks, subtasks, todayFilter, toggleTodayFilter, clearTab } = useSlateStore();
+export default function HudView() {
+  const { tasks, subtasks, todayFilter, toggleTodayFilter } = useSlateStore();
 
   const active = tasks.filter(t => !t.completed);
-
   const todayTasks = active.filter(t => isTodayDate(t.due_date));
   const loadScore = todayTasks.reduce((sum, t) => sum + (PRIORITY_WEIGHT[t.priority] || 0), 0);
   const mustCount = todayTasks.filter(t => t.priority === 'must').length;
@@ -20,24 +19,19 @@ export default function AllView() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.brand}>
-        <span className={styles.brandTitle}>Slate</span>
-        <span className={styles.brandTag}>by egg</span>
-      </div>
-
-      <div className={styles.todayBar}>
+      <div className={styles.controls}>
         <button
           className={`${styles.toggle} ${todayFilter.combined ? styles.on : ''}`}
           onClick={() => toggleTodayFilter('combined')}
         >
-          <span className={styles.toggleDot} />Due Today
+          <span className={styles.dot} />Today
         </button>
       </div>
 
       {loadState && (
-        <div className={`${styles.loadIndicator} ${styles[loadState]}`}>
+        <div className={`${styles.loadBanner} ${styles[loadState]}`}>
           {loadState === 'heavy'
-            ? `Heavy day${mustCount ? ` — ${mustCount} must task${mustCount > 1 ? 's' : ''}` : ''}`
+            ? `Heavy day${mustCount ? ` — ${mustCount} must` : ''}`
             : 'Busy day'}
         </div>
       )}
@@ -48,10 +42,6 @@ export default function AllView() {
         showBadge
         emptyMsg={todayFilter.combined ? 'Nothing due today' : 'All clear'}
       />
-
-      <div className={styles.clearBar}>
-        <button className={styles.btnClear} onClick={() => clearTab('all')}>Clean Slate</button>
-      </div>
     </div>
   );
 }
