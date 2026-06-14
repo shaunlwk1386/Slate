@@ -56,7 +56,7 @@ export default function Nav() {
         );
       })}
       <button className={styles.hudLauncher} onClick={openHud} title="Open HUD panel">
-        ↗
+        HUD
       </button>
     </nav>
   );
