@@ -30,7 +30,7 @@ export default function Nav() {
           <Link
             key={href}
             href={href}
-            className={`${styles.navItem} ${styles.hudItem} ${pathname === href ? styles.active : ''}`}
+            className={`${styles.navItem} ${styles.hudItem}`}
             title={label}
           >
             <span className={styles.icon}>{icon}</span>
