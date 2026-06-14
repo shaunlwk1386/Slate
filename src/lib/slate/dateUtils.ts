@@ -86,9 +86,10 @@ export function formatDateLabel(dateKey: string): { label: string; isPast: boole
   const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
   const isPast = diff < 0;
   let label: string;
-  if (diff === 0) label = 'Today';
-  else if (diff === 1) label = 'Tomorrow';
-  else if (diff === -1) label = 'Yesterday';
+  const dateFmt = d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+  if (diff === 0) label = `Today · ${dateFmt}`;
+  else if (diff === 1) label = `Tomorrow · ${dateFmt}`;
+  else if (diff === -1) label = `Yesterday · ${dateFmt}`;
   else label = d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
   return { label, isPast };
 }
