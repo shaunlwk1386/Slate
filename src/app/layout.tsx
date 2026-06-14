@@ -25,6 +25,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Slate',
   },
+  other: {
+    google: 'notranslate',
+  },
 };
 
 export const viewport: Viewport = {
@@ -37,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
+    <html lang="en" translate="no" className={`${inter.variable} ${dmMono.variable}`}>
       <body>
         {/* Google Identity Services — loaded after page is interactive */}
         <Script
