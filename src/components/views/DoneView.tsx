@@ -106,12 +106,13 @@ export default function DoneView() {
                 <div className={taskListStyles.sectionLabel}>
                   {formatCompletionDateLabel(dateKey)} · {count} task{count !== 1 ? 's' : ''}
                 </div>
-                <div className={taskListStyles.list}>
+                <div className={styles.doneGroup}>
                   {groups[dateKey].map(t => (
                     <TaskCard
                       key={t.id}
                       task={t}
                       subtasks={subtasks.filter(s => s.task_id === t.id)}
+                      inGroup
                     />
                   ))}
                 </div>

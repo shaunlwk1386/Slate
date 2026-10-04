@@ -176,6 +176,12 @@
 }
 .doneStatLbl { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
 
+.doneGroup {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1.5px solid #e2e8f0;
+}
+
 .doneFilterBar { padding: 0 2px 10px; }
 .segGroup {
   display: flex; background: #eef0f4;
@@ -187,6 +193,17 @@
   font-weight: 600; cursor: pointer; color: #6b7280; transition: all 0.15s;
 }
 .seg.active { background: white; color: #1e293b; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+/* Onboarding tab */
+.onboardingGroup { margin-bottom: 8px; }
+.onboardingGroupHeader {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #94a3b8;
+  padding: 14px 2px 8px;
+}
 
 /* Radar tab */
 .radarList { display: flex; flex-direction: column; gap: 8px; }

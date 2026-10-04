@@ -28,9 +28,10 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
 }
+.main:active { cursor: grabbing; }
 
 .checkbox {
   width: 20px;
@@ -61,6 +62,13 @@
 
 .body { flex: 1; min-width: 0; }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .title {
   font-size: 14px;
   font-weight: 500;
@@ -68,9 +76,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .title.done { color: #6b7280; }
 .title.wrap { white-space: normal; overflow: visible; text-overflow: unset; }
+
+.subtaskCount {
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+.subtaskCount.countDone { color: #22c55e; }
 
 .meta {
   display: flex;
@@ -144,12 +163,7 @@
 .overdueAge.aging { background: #fee2e2; color: #dc2626; }
 .overdueAge.stale { background: #fecaca; color: #991b1b; font-weight: 700; }
 
-.subtaskProgress {
-  font-family: var(--font-dm-mono), monospace;
-  font-size: 9px;
-  color: #94a3b8;
-}
-.subtaskProgress.doneAll { color: #22c55e; }
+.subtaskCircle { flex-shrink: 0; }
 
 .timePressure {
   font-family: var(--font-dm-mono), monospace;
@@ -176,6 +190,83 @@
   color: #78350f;
   font-weight: 700;
 }
+
+.dragging {
+  opacity: 0.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+/* ── Segment chip ── */
+.segmentChip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: #f1f5f9;
+  color: #94a3b8;
+  letter-spacing: 0.2px;
+  transition: opacity 0.15s;
+}
+.segmentChip:hover { opacity: 0.8; }
+
+/* ── Segment picker panel ── */
+.segmentPanel {
+  padding: 10px 14px 12px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+.segmentOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.segmentOption {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.segmentOption:hover { border-color: #94a3b8; color: #374151; }
+.segmentOptionActive { border-width: 1.5px; }
+.segmentAddRow {
+  display: flex;
+  gap: 6px;
+}
+.segmentAddInput {
+  flex: 1;
+  background: white;
+  border: 1px dashed #e2e8f0;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #111111;
+  outline: none;
+}
+.segmentAddInput::placeholder { color: #cbd5e1; }
+.segmentAddInput:focus { border-color: #94a3b8; }
+.segmentAddBtn {
+  background: #eef0f4;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 
 .chevron {
   color: #94a3b8;

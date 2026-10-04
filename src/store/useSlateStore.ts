@@ -32,6 +32,9 @@ interface SlateState {
   // Data
   tasks: SlateTask[];
   subtasks: SlateSubtask[];
+  taskOrder: string[];
+  customSegments: { personal: string[]; work: string[] };
+  segmentOrder: { personal: string[]; work: string[] };
 
   // Filters / UI toggles (persisted)
   todayFilter: Record<'personal' | 'work' | 'combined', boolean>;
@@ -61,6 +64,11 @@ interface SlateState {
   loadAll: () => Promise<void>;
   setTasks: (tasks: SlateTask[]) => void;
   setSubtasks: (subtasks: SlateSubtask[]) => void;
+
+  reorderTask: (activeId: string, overId: string) => void;
+  addCustomSegment: (name: string, category: 'personal' | 'work') => void;
+  deleteCustomSegment: (name: string, category: 'personal' | 'work') => Promise<void>;
+  setSegmentOrder: (category: 'personal' | 'work', order: string[]) => void;
 
   addTask: (data: Omit<SlateTask, 'id' | 'created_at'>) => Promise<SlateTask | null>;
   updateTask: (id: string, data: Partial<SlateTask>) => Promise<void>;
@@ -107,6 +115,9 @@ export const useSlateStore = create<SlateState>()(
     (set, get) => ({
       tasks: [],
       subtasks: [],
+      taskOrder: [],
+      customSegments: { personal: [], work: [] },
+      segmentOrder: { personal: [], work: [] },
       todayFilter: { personal: false, work: false, combined: false },
       doneFilter: 'all',
       lastCat: 'personal',
@@ -134,7 +145,13 @@ export const useSlateStore = create<SlateState>()(
       loadAll: async () => {
         try {
           const { tasks, subtasks } = await fetchAll();
-          set({ tasks, subtasks });
+          set(s => {
+            const validIds = new Set(tasks.map(t => t.id));
+            const filtered = s.taskOrder.filter(id => validIds.has(id));
+            const existing = new Set(filtered);
+            const appended = tasks.map(t => t.id).filter(id => !existing.has(id));
+            return { tasks, subtasks, taskOrder: [...filtered, ...appended] };
+          });
         } catch {
           get().showToast('Connection error');
         }
@@ -143,10 +160,65 @@ export const useSlateStore = create<SlateState>()(
       setTasks: (tasks) => set({ tasks }),
       setSubtasks: (subtasks) => set({ subtasks }),
 
+      addCustomSegment: (name, category) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        set(s => {
+          const prev = s.customSegments ?? { personal: [], work: [] };
+          return {
+            customSegments: {
+              personal: prev.personal ?? [],
+              work: prev.work ?? [],
+              [category]: [...new Set([...(prev[category] ?? []), trimmed])],
+            },
+          };
+        });
+      },
+
+      reorderTask: (activeId, overId) => {
+        const { taskOrder } = get();
+        const oldIdx = taskOrder.indexOf(activeId);
+        const newIdx = taskOrder.indexOf(overId);
+        if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+        const newOrder = [...taskOrder];
+        newOrder.splice(oldIdx, 1);
+        newOrder.splice(newIdx, 0, activeId);
+        set({ taskOrder: newOrder });
+      },
+
+      deleteCustomSegment: async (name, category) => {
+        const affectedIds = get().tasks
+          .filter(t => t.context_type === name && t.category === category)
+          .map(t => t.id);
+        set(s => ({
+          customSegments: {
+            ...s.customSegments,
+            [category]: (s.customSegments[category] ?? []).filter(seg => seg !== name),
+          },
+          segmentOrder: {
+            ...s.segmentOrder,
+            [category]: (s.segmentOrder[category] ?? []).filter(seg => seg !== name),
+          },
+          tasks: s.tasks.map(t => affectedIds.includes(t.id) ? { ...t, context_type: null } : t),
+        }));
+        try {
+          await Promise.all(affectedIds.map(id => patchTask(id, { context_type: null })));
+        } catch {
+          get().showToast('Error untagging tasks');
+        }
+        get().showToast(`"${name}" deleted`);
+      },
+
+      setSegmentOrder: (category, order) => {
+        set(s => ({
+          segmentOrder: { ...s.segmentOrder, [category]: order },
+        }));
+      },
+
       addTask: async (data) => {
         try {
           const row = await insertTask(data);
-          set(s => ({ tasks: [...s.tasks, row] }));
+          set(s => ({ tasks: [...s.tasks, row], taskOrder: [...s.taskOrder, row.id] }));
           get().showToast('Task added');
           return row;
         } catch {
@@ -168,7 +240,8 @@ export const useSlateStore = create<SlateState>()(
         await removeTask(id);
         set(s => ({
           tasks: s.tasks.filter(t => t.id !== id),
-          subtasks: s.subtasks.filter(s => s.task_id !== id),
+          subtasks: s.subtasks.filter(sub => sub.task_id !== id),
+          taskOrder: s.taskOrder.filter(oid => oid !== id),
         }));
         get().showToast('Deleted');
       },
@@ -228,6 +301,7 @@ export const useSlateStore = create<SlateState>()(
         set(s => ({
           tasks: s.tasks.filter(t => !ids.includes(t.id)),
           subtasks: s.subtasks.filter(sub => !ids.includes(sub.task_id)),
+          taskOrder: s.taskOrder.filter(oid => !ids.includes(oid)),
           clearedTasks: cleared,
           clearedSubtasks: clearedSubs,
         }));
@@ -245,6 +319,7 @@ export const useSlateStore = create<SlateState>()(
         set(s => ({
           tasks: s.tasks.filter(t => !ids.includes(t.id)),
           subtasks: s.subtasks.filter(sub => !ids.includes(sub.task_id)),
+          taskOrder: s.taskOrder.filter(oid => !ids.includes(oid)),
           clearedTasks: done,
           clearedSubtasks: clearedSubs,
         }));
@@ -388,11 +463,31 @@ export const useSlateStore = create<SlateState>()(
     }),
     {
       name: 'slate-v2-state',
+      version: 2,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const s = persisted as Record<string, unknown>;
+        if (fromVersion < 1) {
+          // v0 had customSegments as a flat string[] — migrate to per-category object
+          if (!s.customSegments || Array.isArray(s.customSegments)) {
+            s.customSegments = { personal: [], work: [] };
+          }
+        }
+        if (fromVersion < 2) {
+          // v1 → v2: add segmentOrder
+          if (!s.segmentOrder || Array.isArray(s.segmentOrder)) {
+            s.segmentOrder = { personal: [], work: [] };
+          }
+        }
+        return s;
+      },
       partialize: (s) => ({
         todayFilter: s.todayFilter,
         doneFilter: s.doneFilter,
         lastCat: s.lastCat,
         lastPriority: s.lastPriority,
+        taskOrder: s.taskOrder,
+        customSegments: s.customSegments,
+        segmentOrder: s.segmentOrder,
       }),
     }
   )

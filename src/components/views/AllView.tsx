@@ -2,21 +2,12 @@
 
 import { useSlateStore } from '@/store/useSlateStore';
 import TaskList from '@/components/tasks/TaskList';
-import { isTodayDate } from '@/lib/slate/dateUtils';
-import { PRIORITY_WEIGHT } from '@/lib/slate/scoring';
 import styles from './views.module.css';
 
 export default function AllView() {
-  const { tasks, subtasks, todayFilter, toggleTodayFilter, clearTab } = useSlateStore();
+  const { tasks, subtasks, clearTab } = useSlateStore();
 
   const active = tasks.filter(t => !t.completed);
-
-  const todayTasks = active.filter(t => isTodayDate(t.due_date));
-  const loadScore = todayTasks.reduce((sum, t) => sum + (PRIORITY_WEIGHT[t.priority] || 0), 0);
-  const mustCount = todayTasks.filter(t => t.priority === 'must').length;
-  const loadState = loadScore >= 7 ? 'heavy' : loadScore >= 3 ? 'busy' : null;
-
-  const base = todayFilter.combined ? active.filter(t => isTodayDate(t.due_date)) : active;
 
   return (
     <div className={styles.page}>
@@ -25,28 +16,11 @@ export default function AllView() {
         <span className={styles.brandTag}>by egg</span>
       </div>
 
-      <div className={styles.todayBar}>
-        <button
-          className={`${styles.toggle} ${todayFilter.combined ? styles.on : ''}`}
-          onClick={() => toggleTodayFilter('combined')}
-        >
-          <span className={styles.toggleDot} />Due Today
-        </button>
-      </div>
-
-      {loadState && (
-        <div className={`${styles.loadIndicator} ${styles[loadState]}`}>
-          {loadState === 'heavy'
-            ? `Heavy day${mustCount ? ` — ${mustCount} must task${mustCount > 1 ? 's' : ''}` : ''}`
-            : 'Busy day'}
-        </div>
-      )}
-
       <TaskList
-        tasks={base}
+        tasks={active}
         subtasks={subtasks}
         showBadge
-        emptyMsg={todayFilter.combined ? 'Nothing due today' : 'All clear'}
+        emptyMsg="All clear"
       />
 
       <div className={styles.clearBar}>

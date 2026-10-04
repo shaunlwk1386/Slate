@@ -2,22 +2,29 @@
 
 import { useRef, useState } from 'react';
 import type { SlateTask, SlateSubtask } from '@/lib/slate/types';
-import {
-  formatDue, formatTime, isOverdue, overdueDays,
-  getOverdueState, formatTimePressure, isTodayDate,
-} from '@/lib/slate/dateUtils';
 import { useSlateStore } from '@/store/useSlateStore';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { getDefaultSegments, segmentStyle } from '@/lib/slate/segments';
 import styles from './TaskCard.module.css';
 
 interface Props {
   task: SlateTask;
   subtasks: SlateSubtask[];
-  isOverdueCard?: boolean;
   inGroup?: boolean;
   wrapTitle?: boolean;
 }
 
-export default function TaskCard({ task, subtasks, isOverdueCard = false, inGroup = false, wrapTitle = false }: Props) {
+export default function TaskCard({ task, subtasks, inGroup = false, wrapTitle = false }: Props) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
   const open = useSlateStore(s => !!s.openCardIds[task.id]);
   const toggleCardOpen = useSlateStore(s => s.toggleCardOpen);
   const addSubtaskRef = useRef<HTMLInputElement>(null);
@@ -27,35 +34,38 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
   const addSubtask = useSlateStore(s => s.addSubtask);
   const deleteTask = useSlateStore(s => s.deleteTask);
   const openEditModal = useSlateStore(s => s.openEditModal);
-  const openExtendModal = useSlateStore(s => s.openExtendModal);
   const addToCal = useSlateStore(s => s.addToCalendar);
   const removeFromCal = useSlateStore(s => s.removeFromCalendar);
   const updateTask = useSlateStore(s => s.updateTask);
   const renameSubtask = useSlateStore(s => s.renameSubtask);
+  const customSegments = useSlateStore(s => s.customSegments);
+  const addCustomSegment = useSlateStore(s => s.addCustomSegment);
 
   const [editSubId, setEditSubId] = useState<string | null>(null);
   const [editSubValue, setEditSubValue] = useState('');
+  const [segmentOpen, setSegmentOpen] = useState(false);
+  const [newSegment, setNewSegment] = useState('');
 
   const isDone = task.completed;
-  const overdue = !isDone && isOverdue(task.due_date);
-  const state = isOverdueCard ? getOverdueState(task.due_date) : 'overdue';
-  const isStale = state === 'stale';
-  const days = isOverdueCard ? overdueDays(task.due_date) : 0;
-
-  const dueLabel = formatDue(task.due_date);
-  const timeLabel = formatTime(task.due_time);
-  const tp = !isDone ? formatTimePressure(task.due_date, task.due_time) : null;
+  const cat = task.category;
+  const allSegments = [...getDefaultSegments(cat), ...(customSegments[cat] ?? [])];
+  const segment = task.context_type || null;
 
   const subTotal = subtasks.length;
   const subDone = subtasks.filter(s => s.completed).length;
   const allSubDone = subTotal > 0 && subDone === subTotal;
+  const pct = subTotal > 0 ? Math.round((subDone / subTotal) * 100) : 0;
 
   const cardClass = [
     styles.card,
     inGroup ? styles.grouped : styles[task.priority],
-    isOverdueCard ? styles.overdueCard : '',
-    isOverdueCard && state !== 'overdue' ? styles[state] : '',
+    isDragging ? styles.dragging : '',
   ].filter(Boolean).join(' ');
+
+  const dragStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   async function handleSubtaskSubmit(input: HTMLInputElement) {
     const title = input.value.trim();
@@ -64,14 +74,9 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
     await addSubtask(task.id, title);
   }
 
-  async function handleStaleKeep() {
-    await updateTask(task.id, { notes: task.notes ?? null });
-  }
-
   function handleConfirmDelete() {
     if (confirm('Delete this task?')) deleteTask(task.id);
   }
-
 
   function startEditSub(id: string, title: string) {
     setEditSubId(id);
@@ -89,6 +94,20 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
     setEditSubValue('');
   }
 
+  function handleSelectSegment(name: string) {
+    updateTask(task.id, { context_type: segment === name ? null : name });
+    setSegmentOpen(false);
+  }
+
+  function handleAddSegment() {
+    const name = newSegment.trim();
+    if (!name) return;
+    if (!allSegments.includes(name)) addCustomSegment(name, cat);
+    updateTask(task.id, { context_type: name });
+    setNewSegment('');
+    setSegmentOpen(false);
+  }
+
   const completedDate = task.completed_at
     ? new Date(task.completed_at).toLocaleDateString('en-SG', {
         weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
@@ -96,59 +115,101 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
     : null;
 
   return (
-    <div className={cardClass} data-id={task.id}>
+    <div ref={setNodeRef} style={dragStyle} className={cardClass} data-id={task.id}>
       {/* ── Main row ── */}
-      <div className={styles.main} onClick={() => toggleCardOpen(task.id)}>
+      <div
+        className={styles.main}
+        onClick={() => { toggleCardOpen(task.id); setSegmentOpen(false); }}
+        {...(!isDone ? listeners : {})}
+        {...(!isDone ? attributes : {})}
+      >
         <div
           className={`${styles.checkbox} ${isDone ? styles.checked : ''}`}
           onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
         />
         <div className={styles.body}>
-          <div className={`${styles.title} ${isDone ? styles.done : ''} ${wrapTitle ? styles.wrap : ''}`}>{task.title}</div>
-          <div className={styles.meta}>
-            {dueLabel && (
-              <span className={`${styles.due} ${overdue ? styles.overdue : ''}`}>{dueLabel}</span>
-            )}
-            {timeLabel && (
-              <span className={styles.dueTime}>{timeLabel}</span>
-            )}
-            {isOverdueCard && (
-              <span className={`${styles.overdueAge} ${styles[state]}`}>{days}d overdue</span>
-            )}
+          <div className={styles.titleRow}>
+            <span className={`${styles.title} ${isDone ? styles.done : ''} ${wrapTitle ? styles.wrap : ''}`}>{task.title}</span>
             {subTotal > 0 && (
-              <span className={`${styles.subtaskProgress} ${allSubDone ? styles.doneAll : ''}`}>
-                {subDone}/{subTotal}
-              </span>
+              <>
+                <svg className={styles.subtaskCircle} width="32" height="32" viewBox="0 0 32 32">
+                  <circle cx="16" cy="16" r={11} fill="none" stroke="#e2e8f0" strokeWidth="2.5" />
+                  <circle
+                    cx="16" cy="16" r={11} fill="none"
+                    stroke={allSubDone ? '#22c55e' : subDone > 0 ? '#3b82f6' : '#94a3b8'}
+                    strokeWidth="2.5"
+                    strokeDasharray={2 * Math.PI * 11}
+                    strokeDashoffset={2 * Math.PI * 11 * (1 - pct / 100)}
+                    strokeLinecap="round"
+                    transform="rotate(-90 16 16)"
+                  />
+                  <text
+                    x="16" y="16"
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize="6" fontWeight="700"
+                    fill={allSubDone ? '#22c55e' : subDone > 0 ? '#3b82f6' : '#94a3b8'}
+                    fontFamily="inherit"
+                  >
+                    {pct}%
+                  </text>
+                </svg>
+                <span className={`${styles.subtaskCount} ${allSubDone ? styles.countDone : ''}`}>{subDone}/{subTotal}</span>
+              </>
             )}
-            {tp && (
-              <span className={`${styles.timePressure} ${styles[tp.state]}`}>{tp.text}</span>
-            )}
-            {task.deferral_count > 0 && (
-              <span className={`${styles.deferBadge} ${task.deferral_count >= 3 ? styles.repeat : ''}`}>
-                Deferred {task.deferral_count}×
-              </span>
-            )}
+          </div>
+          <div className={styles.meta}>
             {task.in_calendar && <span className={styles.calBadge}>In Cal</span>}
+            {!isDone && (
+              <button
+                className={styles.segmentChip}
+                style={segment ? { background: segmentStyle(segment).bg, color: segmentStyle(segment).text } : undefined}
+                onClick={e => { e.stopPropagation(); setSegmentOpen(v => !v); }}
+              >
+                {segment ?? '+ Tag'}
+              </button>
+            )}
           </div>
         </div>
         <span className={`${styles.chevron} ${open ? styles.open : ''}`}>▾</span>
       </div>
 
+      {/* ── Segment picker ── */}
+      {segmentOpen && !isDone && (
+        <div className={styles.segmentPanel} onClick={e => e.stopPropagation()}>
+          <div className={styles.segmentOptions}>
+            {allSegments.map(seg => {
+              const active = segment === seg;
+              const c = segmentStyle(seg);
+              return (
+                <button
+                  key={seg}
+                  className={`${styles.segmentOption} ${active ? styles.segmentOptionActive : ''}`}
+                  style={active ? { background: c.bg, color: c.text, borderColor: c.text } : undefined}
+                  onClick={() => handleSelectSegment(seg)}
+                >
+                  {seg}
+                </button>
+              );
+            })}
+          </div>
+          <div className={styles.segmentAddRow}>
+            <input
+              className={styles.segmentAddInput}
+              placeholder="New segment…"
+              value={newSegment}
+              onChange={e => setNewSegment(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAddSegment();
+                if (e.key === 'Escape') { setNewSegment(''); setSegmentOpen(false); }
+              }}
+            />
+            <button className={styles.segmentAddBtn} onClick={handleAddSegment}>+</button>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail ── */}
       <div className={`${styles.detail} ${open ? styles.open : ''}`}>
-        {/* Stale prompt */}
-        {isStale && (
-          <div className={styles.stalePrompt}>
-            <p className={styles.stalePromptMsg}>Still relevant?</p>
-            <div className={styles.staleActions}>
-              <button className={styles.btnStaleKeep} onClick={handleStaleKeep}>Keep</button>
-              <button className={styles.btnStaleExtend} onClick={() => openExtendModal(task.id)}>Extend</button>
-              <button className={styles.btnStaleRemove} onClick={handleConfirmDelete}>Remove</button>
-            </div>
-          </div>
-        )}
-
-        {/* Done meta */}
         {isDone && (
           <div className={styles.doneRow}>
             <span className={`${styles.priorityLabel} ${styles[task.priority]}`}>
@@ -160,10 +221,8 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
           </div>
         )}
 
-        {/* Notes */}
         {task.notes && <div className={styles.notes}>{task.notes}</div>}
 
-        {/* Subtasks */}
         {subTotal > 0 && (
           <div className={styles.subtaskList}>
             {subtasks.map(sub => (
@@ -198,7 +257,6 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
           </div>
         )}
 
-        {/* Add subtask */}
         {!isDone && (
           <div className={styles.addSubtaskRow}>
             <input
@@ -216,7 +274,6 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
           </div>
         )}
 
-        {/* Actions */}
         <div className={styles.actions}>
           {isDone ? (
             <>
@@ -227,17 +284,12 @@ export default function TaskCard({ task, subtasks, isOverdueCard = false, inGrou
             <>
               <button className={`${styles.btn} ${styles.btnDone}`} onClick={() => toggleTask(task.id)}>Done</button>
               <button className={`${styles.btn} ${styles.btnEdit}`} onClick={() => openEditModal(task.id)}>Edit</button>
-              {isOverdueCard && (
-                <button className={`${styles.btn} ${styles.btnExtend}`} onClick={() => openExtendModal(task.id)}>Extend</button>
-              )}
               {task.in_calendar ? (
                 <button className={`${styles.btn} ${styles.btnCalDel}`} onClick={() => removeFromCal(task.id)}>In Cal ✕</button>
               ) : (
                 <button className={`${styles.btn} ${styles.btnCal}`} onClick={() => addToCal(task.id)}>+ Cal</button>
               )}
-              <button className={`${styles.btn} ${styles.btnDelete}`} onClick={handleConfirmDelete}>
-                {isOverdueCard ? 'Remove' : 'Delete'}
-              </button>
+              <button className={`${styles.btn} ${styles.btnDelete}`} onClick={handleConfirmDelete}>Delete</button>
             </>
           )}
         </div>
